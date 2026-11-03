@@ -118,22 +118,29 @@ The important seam is step 5: everything above it produces numbers, everything b
      two off the response, so leaving them out costs you next unit's
      diagnostics. -->
 
-```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+```powershell
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" --data-raw '{"text": "I like my weekends. I do simple things: I play music. I cook. I watch shows. I do my work. I talk to my friends.", "creator_id": "m3_sample"}'
 ```
 
 ```json
-
+{
+  "content_id": "5b336946-0999-4289-a74b-3561a41b41c0",
+  "guess": "unsure",
+  "confidence": 0.5,
+  "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
+  "model_score": 0.8037,
+  "style_score": null
+}
 ```
+
+<!-- M3 snapshot: style_score and the final label are filled in M4 and M5. -->
 
 **An appeal**
 
-```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
-  -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+<!-- Filled in Milestone 5, after /appeal is built. -->
+
+```powershell
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" --data-raw '{"content_id": "...", "reasoning": "..."}'
 ```
 
 ```json
@@ -142,12 +149,38 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 
 **What the log shows afterwards**
 
-```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+```powershell
+curl.exe "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": 0.5,
+      "content_id": "5b336946-0999-4289-a74b-3561a41b41c0",
+      "creator_id": "m3_sample",
+      "guess": "unsure",
+      "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
+      "model_score": 0.8037,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-03T22:26:42+00:00"
+    },
+    {
+      "combined_score": 0.5,
+      "content_id": "a98f4079-3aff-45ba-904f-2fb44ece311f",
+      "creator_id": "my_test",
+      "guess": "unsure",
+      "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
+      "model_score": 0.5917,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-03T22:33:07+00:00"
+    }
+  ]
+}
 ```
 
 ---
