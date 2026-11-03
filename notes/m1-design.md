@@ -345,8 +345,8 @@ both signals to be high before calling AI), not a label-only change.
   not my natural writing. It scores `0.8037`, just above 0.80. Replace it with a
   natural real sample if one becomes available. The true-negative case (my smell
   paragraph) is real and measured.
-- **M2:** write the five criteria. The false-positive target is 2/10; the
-  reason must be specific to plain writing and the model signal.
+- **M2:** done — five criteria are in `criteria.md`; the false-positive target
+  is 2/10, and the reason names the cost of two appeal letters per ten pieces.
 - **M4:** calibrate the four inputs (clearly AI, clearly human, formal human,
   lightly-edited AI) and confirm the AI label is reachable at 0.80.
 - **M5:** set `AI_THRESHOLD = 0.80` in `config.py` (it is still 0.65 in the

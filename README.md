@@ -166,6 +166,12 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 - *What came back:* The diagnosis was a sandboxed shell that could not write outside the workspace, so the fix was a repo-local cache (`.hf-cache`) plus `HF_HOME`, with a `.gitignore` entry.
 - *What I changed:* I ran the commands with the assistant's guidance, confirmed `detector.py` produced a score, and kept the cache out of git.
 
+**Moment 3 — testing the false-positive number**
+
+- *What I asked for:* I asked Claude to write the message a real writer would send if they were one of the people my 2/10 rate allows.
+- *What came back:* A letter from a hypothetical plain-writing essayist whose own work was labeled high-confidence AI; they offered drafts, timestamps and notes, and asked how to appeal and whether the piece stays marked.
+- *What I changed:* I kept 2/10, but rewrote the criterion's reason to name the cost: two of my ten pieces would produce that letter. I also noted for M5 that the AI label should tell the writer how to appeal.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
