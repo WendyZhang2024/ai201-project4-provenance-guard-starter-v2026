@@ -12,6 +12,7 @@ env/
 # Hugging Face model cache
 .cache/
 models/
+.hf-cache/
 
 # OS noise
 .DS_Store

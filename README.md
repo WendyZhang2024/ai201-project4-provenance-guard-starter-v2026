@@ -36,52 +36,49 @@
 
 ## What This Does
 
-<!-- The path a submission takes, from arriving to the label a reader sees.
-     Six or seven steps — this is the trace you wrote in Milestone 1. -->
+A submission goes through seven steps:
 
+1. **Request arrives.** `POST /submit` parses the JSON and takes `text` and `creator_id`. This adds the raw input and the identity of the submitter.
+2. **Validation.** The service checks that `text` is present, non-empty, and at most 100,000 characters. This adds an accept/reject decision; bad input is stopped here, before any model runs.
+3. **Signal one — the model signal.** `detector.model_signal(text)` measures how predictable the text is to gpt2 and turns that into a 0–1 score. This adds `model_score`, where higher means more AI-like.
+4. **Signal two — the style signal.** `stylometry.style_signal(text)` measures the shape of the text (sentence-length spread, vocabulary variety, punctuation density) and turns it into a 0–1 score. This adds `style_score`, where higher means more AI-like.
+5. **Combining.** `scoring.combine_signals(model_score, style_score)` combines the two scores into one `confidence` between 0 and 1. This adds the single number the labels are based on.
+6. **Labelling.** `scoring.score_to_label(confidence)` maps the score to `guess` (`human`, `unsure`, or `ai`) and to the sentence a reader sees. This adds the human-readable decision.
+7. **Audit and response.** `audit.log_decision(...)` appends one JSON object to `logs/audit.jsonl` with the timestamp, `content_id`, `creator_id`, both signal scores, the combined score, the label, and the status. The response returns the same `content_id` plus the scores and label. This adds the durable record and the ID that `/appeal` needs.
 
+The important seam is step 5: everything above it produces numbers, everything below it depends on the single number it produces. If a label looks wrong, the cause is either a signal or the combining rule — not the label code alone.
 
 ---
 
 ## Signals and Scoring
 
-<!-- For each signal: what property it measures, why that might differ between
-     human and AI writing, and WHAT IT CAN'T SEE.
-
-     The blind spot is not optional. If you can't name it you don't understand
-     the signal yet — and unit 8's attack set is built out of blind spots. -->
-
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** How predictable the text is to gpt2, expressed as perplexity and squashed into a 0–1 score. Lower perplexity (more predictable text) produces a higher score, so higher means more AI-like.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** A language model writes by repeatedly choosing a likely next token, so its output tends to be text the model finds easy to predict. Human writing is lumpier — odd word choices, abrupt turns, concrete details the model did not expect.
 
-**What it can't see:**
+**What it can't see:** Predictability is not authorship. The signal rewards common words in short, ordinary sentences, which is exactly how many real people write: second-language writers, younger writers, and anyone writing plainly on purpose. Dense, ornate prose often goes the other way and reads as human, because rare words are what the model fails to predict. The signal also shifts with text length and topic, and it truncates at 400 tokens. The people most likely to be accused are the ones with the least room to argue back.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text rather than its meaning: sentence-length spread (standard deviation divided by the mean), vocabulary variety (unique words over total words), and punctuation density (with commas, semicolons, and dashes mattering more than full stops). The three measures are normalised, direction-aligned, and combined into a 0–1 score where higher means more AI-like.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower vocabulary band, because that is what choosing the most likely next word produces on average. Human writing is more uneven: a three-word sentence next to a forty-word one, more repetition in some places and more variety in others.
 
-**What it can't see:**
+**What it can't see:** It cannot read. It has no idea what the text says, so anything that changes the shape without changing the substance moves it: typos, sentence fragments, a pasted quotation, deliberate punctuation changes. That is cheap to do on purpose, and the attack set will do exactly that. Two further limits: vocabulary variety falls as text gets longer, so texts of different lengths are not directly comparable, and a one-sentence submission has no sentence-length spread at all.
 
 ### The combining rule
 
-<!-- Write the rule in words, then give the numbers. What happens when the two
-     signals disagree? -->
+**The rule:** A weighted average of the two signal scores. Both signals point the same way — higher means more AI — so the combined score does too. When the signals disagree, the average lands in the unsure band rather than forcing a confident label; that disagreement is treated as genuine uncertainty, not as a tie to break.
 
-**The rule:**
-
-**The numbers:**
+**The numbers:** `0.5 × model_score + 0.5 × style_score`. Thresholds: `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`.
 
 **Where it lives:** `scoring.py::combine_signals`
 
-<!-- ⚠️ The grader checks your code against that line. If your rule lives
-     somewhere else, say where. -->
+**A case where my two signals split, and what my rule does with it:** A lightly edited AI paragraph can score high on the model signal (still predictable) but lower on the style signal (editing introduces uneven sentences). With `model_score = 0.92` and `style_score = 0.48`, the average is `0.70`, which lands in the unsure band. The rule does not force an AI label; it reports uncertainty, and the reader can appeal if the text is theirs.
 
-**A case where my two signals split, and what my rule does with it:**
+<!-- M1 design note: the false-positive case that drives the 0.80 threshold is traced in notes/m1-design.md. M5 must set these thresholds in config.py and re-check this section against the code. -->
 
 
 
@@ -157,17 +154,17 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ## How I Used AI
 
-**Moment 1**
+**Moment 1 — understanding the instructions**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked an AI assistant to explain the project instructions. I was super confused by the two-unit structure and found it hard to start.
+- *What came back:* A step-by-step breakdown of M1–M6, an explanation of the two signals and their blind spots, and the false-positive trade-off behind the thresholds.
+- *What I changed:* I used it as a map, not an answer. I chose the 0.80 AI threshold, the 2/10 false-positive target, and the C2 “unsure” wording, and used those decisions to draft the M1 trace.
 
-**Moment 2**
+**Moment 2 — getting the model to load**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* `python detector.py` failed with `PermissionError` while creating `~/.cache/huggingface/models--gpt2`. I asked why, and whether the model could run without that cache.
+- *What came back:* The diagnosis was a sandboxed shell that could not write outside the workspace, so the fix was a repo-local cache (`.hf-cache`) plus `HF_HOME`, with a `.gitignore` entry.
+- *What I changed:* I ran the commands with the assistant's guidance, confirmed `detector.py` produced a score, and kept the cache out of git.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
