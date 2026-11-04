@@ -2,14 +2,11 @@
 Turning two numbers into one, and one number into something a person can read.
 ← YOU BUILD THIS IN MILESTONES 4 AND 5
 
-Two functions live here, and both are stubs.
-
 `combine_signals` is where your false-positive decision from Milestone 1
 actually gets made. Everything above it — the labels, the appeal path — is
 downstream of a number this function produced.
 
-`score_to_label` is where you stop writing for a machine and start writing for
-a person. A score of 0.62 means nothing to a writer.
+`score_to_label` is still a stub until Milestone 5.
 
 ⚠️ Your README's **Signals and Scoring** section has to name the file and
 function holding your combining rule. The grader checks your code against what
@@ -21,7 +18,7 @@ import config
 
 def combine_signals(model_score: float, style_score: float) -> float:
     """
-    Combine two 0–1 signals into one 0–1 score. ← TODO (Milestone 4)
+    Combine two 0–1 signals into one 0–1 score.
 
     Both inputs point the same way: higher means more likely AI. Your output
     should too.
@@ -49,14 +46,22 @@ def combine_signals(model_score: float, style_score: float) -> float:
       - Milestone 4 asks you to find a case where your two signals split and
         write it down. That case is what this rule exists to handle.
 
-    The weights in config.py are placeholders. Change them, or ignore them and
-    write a different rule.
+    The implemented rule is a 0.6/0.4 weighted average plus a gate. When the
+    model signal is at least `config.AI_GATE_MODEL` and the style signal is at
+    least `config.AI_GATE_STYLE`, the score is lifted to `config.AI_GATE_FLOOR`,
+    the bottom of the AI band. The gate catches AI text whose style score is
+    only moderate, but it does not fire for the plain weekend sample (model
+    0.8037). The weights and gate thresholds live in config.py.
     """
-    # TODO: replace this
-    return (
+    score = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
+
+    if model_score >= config.AI_GATE_MODEL and style_score >= config.AI_GATE_STYLE:
+        score = max(score, config.AI_GATE_FLOOR)
+
+    return round(score, 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:

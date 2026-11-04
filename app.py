@@ -31,6 +31,8 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import scoring
+import stylometry
 
 app = Flask(__name__)
 
@@ -250,12 +252,12 @@ def submit():
         audit.log_rejection(creator_id=creator_id, reason="text_too_short")
         return jsonify({"error": "bad_request", "message": str(exc)}), 400
 
-    # Milestone 3 placeholders. Milestones 4 and 5 replace these with the
-    # second signal, the combined score, and the real label.
+    # Milestone 4: second signal and combined score. The label is still a
+    # placeholder until Milestone 5.
+    style_score = stylometry.style_signal(text)
+    confidence = scoring.combine_signals(model_score, style_score)
     guess = "unsure"
-    confidence = 0.5
     label = "PLACEHOLDER — the final labels arrive in Milestone 5."
-    style_score = None
 
     audit.log_decision(
         content_id=content_id,

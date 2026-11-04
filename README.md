@@ -39,9 +39,9 @@
 A submission goes through seven steps:
 
 1. **Request arrives.** `POST /submit` parses the JSON and takes `text` and `creator_id`. This adds the raw input and the identity of the submitter.
-2. **Validation.** The service checks that `text` is present, non-empty, and at most 100,000 characters. This adds an accept/reject decision; bad input is stopped here, before any model runs.
+2. **Validation.** The service checks that `text` is present, non-empty, at most 100,000 characters, and long enough for the model (at least 3 tokens). This adds an accept/reject decision; bad input is stopped here, before any model runs. Only the first 400 tokens are scored, so most of a very long submission is never read by the model.
 3. **Signal one — the model signal.** `detector.model_signal(text)` measures how predictable the text is to gpt2 and turns that into a 0–1 score. This adds `model_score`, where higher means more AI-like.
-4. **Signal two — the style signal.** `stylometry.style_signal(text)` measures the shape of the text (sentence-length spread, vocabulary variety, punctuation density) and turns it into a 0–1 score. This adds `style_score`, where higher means more AI-like.
+4. **Signal two — the style signal.** `stylometry.style_signal(text)` measures the shape of the text — sentence-length spread and punctuation density; vocabulary variety is measured but excluded after calibration — and turns it into a 0–1 score. This adds `style_score`, where higher means more AI-like.
 5. **Combining.** `scoring.combine_signals(model_score, style_score)` combines the two scores into one `confidence` between 0 and 1. This adds the single number the labels are based on.
 6. **Labelling.** `scoring.score_to_label(confidence)` maps the score to `guess` (`human`, `unsure`, or `ai`) and to the sentence a reader sees. This adds the human-readable decision.
 7. **Audit and response.** `audit.log_decision(...)` appends one JSON object to `logs/audit.jsonl` with the timestamp, `content_id`, `creator_id`, both signal scores, the combined score, the label, and the status. The response returns the same `content_id` plus the scores and label. This adds the durable record and the ID that `/appeal` needs.
@@ -58,25 +58,27 @@ The important seam is step 5: everything above it produces numbers, everything b
 
 **Why that might differ between human and AI writing:** A language model writes by repeatedly choosing a likely next token, so its output tends to be text the model finds easy to predict. Human writing is lumpier — odd word choices, abrupt turns, concrete details the model did not expect.
 
-**What it can't see:** Predictability is not authorship. The signal rewards common words in short, ordinary sentences, which is exactly how many real people write: second-language writers, younger writers, and anyone writing plainly on purpose. Dense, ornate prose often goes the other way and reads as human, because rare words are what the model fails to predict. The signal also shifts with text length and topic, and it truncates at 400 tokens. The people most likely to be accused are the ones with the least room to argue back.
+**What it can't see:** Predictability is not authorship. The signal rewards common words in short, ordinary sentences, which is exactly how many real people write: second-language writers, younger writers, and anyone writing plainly on purpose. Dense, ornate prose often goes the other way and reads as human, because rare words are what the model fails to predict. The signal also shifts with text length and topic, and it truncates at 400 tokens: anything after the first 400 tokens is invisible, so appending human-style text or hiding AI content later can evade it. gpt2 is also English-centric; text in other languages often has very high perplexity and is read as human, which is a direct bypass. The people most likely to be accused are the ones with the least room to argue back.
 
 ### Signal two — the style signal
 
-**What it measures:** The shape of the text rather than its meaning: sentence-length spread (standard deviation divided by the mean), vocabulary variety (unique words over total words), and punctuation density (with commas, semicolons, and dashes mattering more than full stops). The three measures are normalised, direction-aligned, and combined into a 0–1 score where higher means more AI-like.
+**What it measures:** The shape of the text rather than its meaning: sentence-length spread (standard deviation divided by the mean) and punctuation density (commas, semicolons, colons, and dashes per sentence). Vocabulary variety (unique words over total words) is also computed, but on the four calibration inputs it did not separate the texts — it sat at roughly 0.73–0.80 and was slightly higher for the AI sample — so it is reported but not included in the score. The two used measures are normalised and combined into a 0–1 score where higher means more AI-like.
 
-**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower vocabulary band, because that is what choosing the most likely next word produces on average. Human writing is more uneven: a three-word sentence next to a forty-word one, more repetition in some places and more variety in others.
+**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and more uniform punctuation, because that is what choosing the most likely next word produces on average. Human writing is more uneven: a three-word sentence next to a forty-word one, and punctuation that varies with the writer.
 
-**What it can't see:** It cannot read. It has no idea what the text says, so anything that changes the shape without changing the substance moves it: typos, sentence fragments, a pasted quotation, deliberate punctuation changes. That is cheap to do on purpose, and the attack set will do exactly that. Two further limits: vocabulary variety falls as text gets longer, so texts of different lengths are not directly comparable, and a one-sentence submission has no sentence-length spread at all.
+**What it can't see:** It cannot read. It has no idea what the text says, so anything that changes the shape without changing the substance moves it: typos, sentence fragments, a pasted quotation, deliberate punctuation changes. That is cheap to do on purpose, and the attack set will do exactly that. Two further limits: vocabulary variety falls as text gets longer, which is one reason it was excluded from the score, and a one-sentence submission has no sentence-length spread at all; the code treats that spread component as neutral (0.5) rather than calling it AI.
 
 ### The combining rule
 
-**The rule:** A weighted average of the two signal scores. Both signals point the same way — higher means more AI — so the combined score does too. When the signals disagree, the average lands in the unsure band rather than forcing a confident label; that disagreement is treated as genuine uncertainty, not as a tie to break.
+**The rule:** A weighted average of the two signal scores, plus a gate. Both signals point the same way — higher means more AI — so the combined score does too. When they disagree, the weighted average usually pulls toward the unsure band. The gate is the exception: when the model signal is at least `0.85` and the style signal is at least `0.50`, the combined score is lifted to the AI floor (`0.80`), because the calibration showed that a long AI text can have only a moderate style score. On that long-AI input, `model_score = 0.8810` and `style_score = 0.5603`: the weighted average is `0.7527`, and the gate lifts it to `0.8000`. The gate does not fire for the plain weekend sample (`model_score = 0.8037`), so that false positive stays in unsure.
 
-**The numbers:** `0.5 × model_score + 0.5 × style_score`. Thresholds: `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`.
+**The numbers:** weights `0.6 × model_score + 0.4 × style_score`; gate `model_score >= 0.85 and style_score >= 0.50` lifts the score to `0.80`; thresholds `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`. These are four-input design choices, not a statistical calibration; Unit 8 tests them on more inputs.
 
 **Where it lives:** `scoring.py::combine_signals`
 
-**A case where my two signals split, and what my rule does with it:** A lightly edited AI paragraph can score high on the model signal (still predictable) but lower on the style signal (editing introduces uneven sentences). With `model_score = 0.92` and `style_score = 0.48`, the average is `0.70`, which lands in the unsure band. The rule does not force an AI label; it reports uncertainty, and the reader can appeal if the text is theirs.
+**A case where my two signals split, and what my rule does with it:** On the formal-human calibration input, the model signal is `0.6349` — formal prose is predictable enough to look AI-ish — but the style signal is `0.2852`, because the sentences and punctuation look human. The weighted score is `0.6 × 0.6349 + 0.4 × 0.2852 = 0.4950`, which lands in the unsure band. The rule does not force an AI label; it reports uncertainty, and the reader can appeal if the text is theirs.
+
+**A limitation of the pair:** the two signals are not independent. Both reward plain, short, common-word writing, so a plain human writer can score high on both; the weighted average does not cancel that, and the gate can make it worse. The appeal path and the false-positive criterion are the mitigation, not the signals themselves.
 
 <!-- M1 design note: the false-positive case that drives the 0.80 threshold is traced in notes/m1-design.md. M5 must set these thresholds in config.py and re-check this section against the code. -->
 
@@ -119,21 +121,21 @@ The important seam is step 5: everything above it produces numbers, everything b
      diagnostics. -->
 
 ```powershell
-curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" --data-raw '{"text": "I like my weekends. I do simple things: I play music. I cook. I watch shows. I do my work. I talk to my friends.", "creator_id": "m3_sample"}'
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" --data-raw '{"text": "I like my weekends. I do simple things: I play music. I cook. I watch shows. I do my work. I talk to my friends.", "creator_id": "m4_sample"}'
 ```
 
 ```json
 {
-  "content_id": "5b336946-0999-4289-a74b-3561a41b41c0",
+  "content_id": "0eae2b8a-163e-4d2f-9097-703f7b86c4dd",
   "guess": "unsure",
-  "confidence": 0.5,
+  "confidence": 0.7622,
   "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
   "model_score": 0.8037,
-  "style_score": null
+  "style_score": 0.7
 }
 ```
 
-<!-- M3 snapshot: style_score and the final label are filled in M4 and M5. -->
+<!-- M4 snapshot: the final label is filled in Milestone 5. -->
 
 **An appeal**
 
@@ -150,38 +152,29 @@ curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json
 **What the log shows afterwards**
 
 ```powershell
-curl.exe "http://127.0.0.1:5000/log?limit=3"
+curl.exe "http://127.0.0.1:5000/log?limit=1"
 ```
 
 ```json
 {
-  "count": 2,
+  "count": 1,
   "entries": [
     {
-      "combined_score": 0.5,
-      "content_id": "5b336946-0999-4289-a74b-3561a41b41c0",
-      "creator_id": "m3_sample",
+      "combined_score": 0.7622,
+      "content_id": "0eae2b8a-163e-4d2f-9097-703f7b86c4dd",
+      "creator_id": "m4_sample",
       "guess": "unsure",
       "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
       "model_score": 0.8037,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-11-03T22:26:42+00:00"
-    },
-    {
-      "combined_score": 0.5,
-      "content_id": "a98f4079-3aff-45ba-904f-2fb44ece311f",
-      "creator_id": "my_test",
-      "guess": "unsure",
-      "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
-      "model_score": 0.5917,
-      "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-11-03T22:33:07+00:00"
+      "style_score": 0.7,
+      "timestamp": "2026-11-03T23:06:31+00:00"
     }
   ]
 }
 ```
+
+This query returns the latest entry; the earlier test rows remain in `logs/audit.jsonl`. `confidence` in the response and `combined_score` in the audit log are the same number.
 
 ---
 
@@ -203,7 +196,7 @@ curl.exe "http://127.0.0.1:5000/log?limit=3"
 
 - *What I asked for:* I asked Claude to write the message a real writer would send if they were one of the people my 2/10 rate allows.
 - *What came back:* A letter from a hypothetical plain-writing essayist whose own work was labeled high-confidence AI; they offered drafts, timestamps and notes, and asked how to appeal and whether the piece stays marked.
-- *What I changed:* I kept 2/10, but rewrote the criterion's reason to name the cost: two of my ten pieces would produce that letter. I also noted for M5 that the AI label should tell the writer how to appeal.
+- *What I changed:* I kept the 2/10 target, but rewrote the criterion's reason to name the cost: two of my ten pieces would produce that letter. The 2/10 is a target, not a measured rate; Unit 8 measures it. I also noted for M5 that the AI label should tell the writer how to appeal.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 

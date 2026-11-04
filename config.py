@@ -54,8 +54,19 @@ DETECTOR_MAX_TOKENS = 400
 # down BEFORE you code it, and to put the numbers in your README. Whatever you
 # decide, it goes here.
 
-WEIGHT_MODEL_SIGNAL = 0.5
-WEIGHT_STYLE_SIGNAL = 0.5
+# The model signal separated the four calibration inputs better, and the style
+# signal is noisier, so the model gets more weight. The two weights sum to 1.
+WEIGHT_MODEL_SIGNAL = 0.6
+WEIGHT_STYLE_SIGNAL = 0.4
+
+# The gate: when the model signal is very confident and the style signal is not
+# strongly human, lift the combined score to the AI floor. This catches AI text
+# whose style score is only moderate without letting the plain weekend sample
+# (model 0.8037) through. The values are a four-input design choice, not a
+# statistically calibrated result.
+AI_GATE_MODEL = 0.85
+AI_GATE_STYLE = 0.50
+AI_GATE_FLOOR = 0.80
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
