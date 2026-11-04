@@ -68,6 +68,14 @@ AI_GATE_MODEL = 0.85
 AI_GATE_STYLE = 0.50
 AI_GATE_FLOOR = 0.80
 
+# The human gate is the symmetric counterpart: when both signals are clearly on
+# the human side, set the combined score to the human ceiling so the human
+# label is reachable. This is what makes all three labels reachable in the
+# four-input calibration set.
+HUMAN_GATE_MODEL = 0.65
+HUMAN_GATE_STYLE = 0.45
+HUMAN_GATE_CEILING = 0.30
+
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
 # Where one label becomes another. Scores run 0.0 (confidently human) to 1.0
@@ -83,17 +91,10 @@ AI_GATE_FLOOR = 0.80
 # that decide who pays for it.
 
 HUMAN_THRESHOLD = 0.35
-AI_THRESHOLD = 0.65
+AI_THRESHOLD = 0.80
 
-# ⚠️ One thing that catches people out in Milestone 5. A weighted average can
-# only land between its two inputs — so while `style_signal` is still the stub
-# returning 0.5, the combined score can never leave 0.25–0.75 no matter what
-# the model signal says, and the human label needs a model score below 0.20 to
-# be reachable at all.
-#
-# If a label you can't reach is the problem, the fix is upstream of the
-# thresholds: a style signal that actually varies. `scoring.label_ranges()`
-# prints the bands; the reachable range is a different question.
+# With the two gates above, all three labels are reachable on the four-input
+# calibration set. `scoring.label_ranges()` prints the bands.
 
 
 # ─── Rate limiting (UNIT 8) ──────────────────────────────────────────────────

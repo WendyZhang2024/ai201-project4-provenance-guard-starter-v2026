@@ -47,13 +47,13 @@ Two things worth knowing before you pick numbers:
 
 **Criterion:** Of the 10 pieces I wrote myself in my fixed calibration set, at most **2** are labeled high-confidence AI in **each of 3 trials**.
 
-**Why this target:** Signal one rewards common words and short sentences, and my own writing is plain; a wrong accusation costs the writer more than a missed detection costs the site. At 2/10, two of my ten pieces would produce the kind of appeal letter from the brief's real-writer exercise — that is the cost I am accepting — and I keep 2/10 because my own plain style is exactly what signal one over-flags, while a stricter 1/10 would be a number I cannot yet defend.
+**Why this target:** Signal one rewards common words and short sentences, and my own writing is plain; a wrong accusation costs the writer more than a missed detection costs the site. At 2/10, two of my ten pieces would produce the kind of appeal letter from the brief's real-writer exercise — that is the cost I am accepting. The signal calibration so far used only four inputs, so I do not have enough evidence to commit to a stricter 1/10; Unit 8 measures the actual rate.
 
 ---
 
 ## 2. Score spread
 
-**Criterion:** In at least **3 of 4 pairs** from my fixed calibration set, the clearly-AI text lands in the AI band (confidence **≥ 0.80**) and the clearly-human text lands in the human band (confidence **≤ 0.35**).
+**Criterion:** In at least **3 of 4 pairs** from my fixed calibration set, the clearly-AI text lands in the AI band (confidence **≥ 0.80**) and the clearly-human text lands in the human band (confidence **≤ 0.35**). A pair passes only when both texts land in their bands.
 
 **Why this target:** The bands are 0.45 apart; if the two texts do not land in different bands, the labels are not separating the cases they are supposed to separate. 3 of 4 allows one noisy pair without letting the whole standard slide.
 
@@ -69,7 +69,7 @@ Two things worth knowing before you pick numbers:
 
 ## 4. Appeal path
 
-**Criterion:** Every valid appeal (existing `content_id`, non-empty `reasoning`) returns **200**, appends an entry with `status: under_review`, and increments `appeal_count`; an unknown `content_id` or a mismatched `creator_id` returns **404**.
+**Criterion:** Every valid appeal (existing `content_id`, non-empty `reasoning`) returns **200**, appends an entry with `status: under_review`, and increments `appeal_count`; an empty `reasoning` returns **400**; an unknown `content_id` or a mismatched `creator_id` returns **404**.
 
 **Why this target:** The appeal is the only remedy for a false positive; if it does not record, the wrong label stands. The 404 is deliberately the same for an unknown id and a wrong creator, so the endpoint does not leak whether an id exists.
 
@@ -77,11 +77,11 @@ Two things worth knowing before you pick numbers:
 
 ## 5. Bad input
 
-**Criterion:** Missing or empty `text` returns **400**; `text` over **100,000 characters** returns **413**; neither returns **500**; both leave a rejection entry in the log.
+**Criterion:** Missing, empty, null, or too-short `text` (fewer than 3 tokens) returns **400**; `text` over **100,000 characters** returns **413**; neither returns **500**; both leave a rejection entry in the log.
 
 **Why this target:** Malformed input is one of the most common real failures; 400/413 are contract responses, 500 is a bug. The rejection entry makes the attempt visible instead of leaving an absence.
 
-**Where the sets live:** the 10 pieces for criterion 1, the 4 pairs for criterion 2, and the 9 pieces for criterion 3 will be fixed in `scenarios.py`, so someone else can rerun them without asking me which texts I meant.
+**Where the sets live:** the 10 pieces for criterion 1, the 4 pairs for criterion 2, and the 9 pieces for criterion 3 are fixed in `scenarios.py`, so someone else can rerun them without asking me which texts I meant. Criterion 4 is tested by hand with a real `content_id` (see the README Sample Run). These ten are application-essay excerpts; the false-positive rate is about this genre, not all of my writing.
 
 ---
 

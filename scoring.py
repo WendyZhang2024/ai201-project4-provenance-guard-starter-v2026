@@ -46,12 +46,14 @@ def combine_signals(model_score: float, style_score: float) -> float:
       - Milestone 4 asks you to find a case where your two signals split and
         write it down. That case is what this rule exists to handle.
 
-    The implemented rule is a 0.6/0.4 weighted average plus a gate. When the
+    The implemented rule is a 0.6/0.4 weighted average plus two gates. When the
     model signal is at least `config.AI_GATE_MODEL` and the style signal is at
     least `config.AI_GATE_STYLE`, the score is lifted to `config.AI_GATE_FLOOR`,
-    the bottom of the AI band. The gate catches AI text whose style score is
-    only moderate, but it does not fire for the plain weekend sample (model
-    0.8037). The weights and gate thresholds live in config.py.
+    the bottom of the AI band. The human gate is symmetric: when the model
+    signal is at most `config.HUMAN_GATE_MODEL` and the style signal at most
+    `config.HUMAN_GATE_STYLE`, the score is capped at `config.HUMAN_GATE_CEILING`
+    so the human label is reachable. The weights and gate thresholds live in
+    config.py.
     """
     score = (
         config.WEIGHT_MODEL_SIGNAL * model_score
@@ -60,6 +62,11 @@ def combine_signals(model_score: float, style_score: float) -> float:
 
     if model_score >= config.AI_GATE_MODEL and style_score >= config.AI_GATE_STYLE:
         score = max(score, config.AI_GATE_FLOOR)
+    elif (
+        model_score <= config.HUMAN_GATE_MODEL
+        and style_score <= config.HUMAN_GATE_STYLE
+    ):
+        score = min(score, config.HUMAN_GATE_CEILING)
 
     return round(score, 4)
 
@@ -67,7 +74,6 @@ def combine_signals(model_score: float, style_score: float) -> float:
 def score_to_label(score: float) -> tuple[str, str]:
     """
     Turn a score into a guess and the text a reader actually sees.
-    ← TODO (Milestone 5)
 
     Returns:
         (guess, label_text) — where `guess` is a short machine-readable string
@@ -90,12 +96,17 @@ def score_to_label(score: float) -> tuple[str, str]:
     think if they got it on their own work. That question is the whole
     milestone.
     """
-    # TODO: replace this — thresholds are in config.py
     if score >= config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
+        return "ai", (
+            "We think this was probably generated with AI. "
+            "If this is your own work, you can appeal and ask for a human review."
+        )
     if score <= config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return "human", "We think this was probably written by a person."
+    return "unsure", (
+        "We couldn't make a confident call on this piece. "
+        "If this is your own work, you can appeal and ask for a human review."
+    )
 
 
 def label_ranges() -> list[tuple[str, str]]:

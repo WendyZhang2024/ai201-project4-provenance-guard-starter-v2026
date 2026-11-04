@@ -70,17 +70,17 @@ The important seam is step 5: everything above it produces numbers, everything b
 
 ### The combining rule
 
-**The rule:** A weighted average of the two signal scores, plus a gate. Both signals point the same way — higher means more AI — so the combined score does too. When they disagree, the weighted average usually pulls toward the unsure band. The gate is the exception: when the model signal is at least `0.85` and the style signal is at least `0.50`, the combined score is lifted to the AI floor (`0.80`), because the calibration showed that a long AI text can have only a moderate style score. On that long-AI input, `model_score = 0.8810` and `style_score = 0.5603`: the weighted average is `0.7527`, and the gate lifts it to `0.8000`. The gate does not fire for the plain weekend sample (`model_score = 0.8037`), so that false positive stays in unsure.
+**The rule:** A weighted average of the two signal scores, plus two symmetric gates. Both signals point the same way — higher means more AI. When they disagree, the weighted average usually pulls toward the unsure band. The AI gate is the exception on the high side: when the model signal is at least `0.85` and the style signal is at least `0.50`, the score is lifted to the AI floor (`0.80`); on the long-AI calibration input, `model_score = 0.8810` and `style_score = 0.5603` average to `0.7527`, and the gate lifts it to `0.8000`. The human gate is the exception on the low side: when the model signal is at most `0.65` and the style signal is at most `0.45`, the score is capped at `0.30`, so the human label is reachable. The human gate does not fire for the plain weekend sample (`model_score = 0.8037`), so that false positive stays in unsure.
 
-**The numbers:** weights `0.6 × model_score + 0.4 × style_score`; gate `model_score >= 0.85 and style_score >= 0.50` lifts the score to `0.80`; thresholds `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`. These are four-input design choices, not a statistical calibration; Unit 8 tests them on more inputs.
+**The numbers:** weights `0.6 × model_score + 0.4 × style_score`; AI gate `model_score >= 0.85 and style_score >= 0.50` lifts to `0.80`; human gate `model_score <= 0.65 and style_score <= 0.45` caps at `0.30`; thresholds `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`. These are four-input design choices, not a statistical calibration; Unit 8 tests them on more inputs.
 
 **Where it lives:** `scoring.py::combine_signals`
 
-**A case where my two signals split, and what my rule does with it:** On the formal-human calibration input, the model signal is `0.6349` — formal prose is predictable enough to look AI-ish — but the style signal is `0.2852`, because the sentences and punctuation look human. The weighted score is `0.6 × 0.6349 + 0.4 × 0.2852 = 0.4950`, which lands in the unsure band. The rule does not force an AI label; it reports uncertainty, and the reader can appeal if the text is theirs.
+**A case where my two signals split, and what my rule does with it:** On the formal-human calibration input, the model signal is `0.6349` — formal prose is predictable enough to look AI-ish — but the style signal is `0.2852`, because the sentences and punctuation look human. The weighted average would be `0.6 × 0.6349 + 0.4 × 0.2852 = 0.4950`, but the human gate sees both signals on the human side and caps the score at `0.30`, so the label is human. The rule does not force an AI label; when the signals disagree it reports uncertainty, and when both agree human it calls human.
 
 **A limitation of the pair:** the two signals are not independent. Both reward plain, short, common-word writing, so a plain human writer can score high on both; the weighted average does not cancel that, and the gate can make it worse. The appeal path and the false-positive criterion are the mitigation, not the signals themselves.
 
-<!-- M1 design note: the false-positive case that drives the 0.80 threshold is traced in notes/m1-design.md. M5 must set these thresholds in config.py and re-check this section against the code. -->
+
 
 
 
@@ -88,21 +88,16 @@ The important seam is step 5: everything above it produces numbers, everything b
 
 ## Label Variants
 
-<!-- The exact text of all three labels, as a reader would see them, and the
-     score range each covers.
-
-     Write them for someone who has never heard the word "threshold". -->
-
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00–0.35 | We think this was probably written by a person. |
+| unsure | 0.35–0.80 | We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review. |
+| high-confidence AI | 0.80–1.00 | We think this was probably generated with AI. If this is your own work, you can appeal and ask for a human review. |
 
-**Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+**Boundary rule:** a score of `0.35` or below is human; a score of `0.80` or above is AI; only scores strictly between are unsure.  
+**Reachability check (four M4 inputs):** human `0.30` from the clearly-human input (`model_score 0.5762`, `style_score 0.3801`, human gate); unsure `0.7622` from the weekend input (`0.8037`, `0.7000`); AI `0.8000` from the long-AI input (`0.8810`, `0.5603`, AI gate); the short-AI input reached `0.8048` (`0.8864`, `0.6823`). The long-AI input returned `guess: "ai"`. The 9-piece coverage set is the Unit 8 test.
+
+**Why I worded the "unsure" one this way:** It puts the uncertainty on the system rather than the writer — “we couldn't make a confident call” — and gives the writer a next step: appeal and a human review. It does not say “we think you used AI.”
 
 
 
@@ -110,71 +105,75 @@ The important seam is step 5: everything above it produces numbers, everything b
 
 ## Sample Run
 
-<!-- One submission and one appeal, pasted as text: the request, the response,
-     and the log entries. -->
-
 **A submission**
 
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
-
 ```powershell
-curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" --data-raw '{"text": "I like my weekends. I do simple things: I play music. I cook. I watch shows. I do my work. I talk to my friends.", "creator_id": "m4_sample"}'
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" --data-raw '{"text": "I like my weekends. I do simple things: I play music. I cook. I watch shows. I do my work. I talk to my friends.", "creator_id": "demo_writer"}'
 ```
 
 ```json
 {
-  "content_id": "0eae2b8a-163e-4d2f-9097-703f7b86c4dd",
+  "content_id": "d50ec03c-7c67-4121-8a4b-cf2987139897",
   "guess": "unsure",
   "confidence": 0.7622,
-  "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
+  "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
   "model_score": 0.8037,
   "style_score": 0.7
 }
 ```
 
-<!-- M4 snapshot: the final label is filled in Milestone 5. -->
+The `style_score` of `0.7` is the average of the spread component (`0.4833`) and the punctuation component (`0.9167`), rounded to four decimals; it is not a fallback.
 
 **An appeal**
 
-<!-- Filled in Milestone 5, after /appeal is built. -->
-
 ```powershell
-curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" --data-raw '{"content_id": "...", "reasoning": "..."}'
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" --data-raw '{"content_id": "d50ec03c-7c67-4121-8a4b-cf2987139897", "reasoning": "I wrote this myself. This is just how I write."}'
 ```
 
 ```json
-
+{
+  "ok": true,
+  "content_id": "d50ec03c-7c67-4121-8a4b-cf2987139897",
+  "status": "under_review",
+  "appeal_count": 1,
+  "message": "Thanks — a human will review this."
+}
 ```
 
 **What the log shows afterwards**
 
 ```powershell
-curl.exe "http://127.0.0.1:5000/log?limit=1"
+curl.exe "http://127.0.0.1:5000/log?limit=2"
 ```
 
 ```json
 {
-  "count": 1,
+  "count": 2,
   "entries": [
     {
       "combined_score": 0.7622,
-      "content_id": "0eae2b8a-163e-4d2f-9097-703f7b86c4dd",
-      "creator_id": "m4_sample",
+      "content_id": "d50ec03c-7c67-4121-8a4b-cf2987139897",
+      "creator_id": "demo_writer",
       "guess": "unsure",
-      "label": "PLACEHOLDER — the final labels arrive in Milestone 5.",
+      "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
       "model_score": 0.8037,
       "status": "decided",
       "style_score": 0.7,
-      "timestamp": "2026-11-03T23:06:31+00:00"
+      "timestamp": "2026-11-04T00:17:44+00:00"
+    },
+    {
+      "content_id": "d50ec03c-7c67-4121-8a4b-cf2987139897",
+      "creator_id": "demo_writer",
+      "event": "appeal",
+      "reasoning": "I wrote this myself. This is just how I write.",
+      "status": "under_review",
+      "timestamp": "2026-11-04T00:17:47+00:00"
     }
   ]
 }
 ```
 
-This query returns the latest entry; the earlier test rows remain in `logs/audit.jsonl`. `confidence` in the response and `combined_score` in the audit log are the same number.
+This query returns the two entries for this submission; the earlier test rows remain in `logs/audit.jsonl`. `confidence` in the response and `combined_score` in the audit log are the same number.
 
 ---
 
@@ -184,7 +183,7 @@ This query returns the latest entry; the earlier test rows remain in `logs/audit
 
 - *What I asked for:* I asked an AI assistant to explain the project instructions. I was super confused by the two-unit structure and found it hard to start.
 - *What came back:* A step-by-step breakdown of M1–M6, an explanation of the two signals and their blind spots, and the false-positive trade-off behind the thresholds.
-- *What I changed:* I used it as a map, not an answer. I chose the 0.80 AI threshold, the 2/10 false-positive target, and the C2 “unsure” wording, and used those decisions to draft the M1 trace.
+- *What I changed:* I used it as a map, not an answer. I chose the 0.80 AI threshold, the 2/10 false-positive target, and the “unsure” label wording, and used those decisions to draft the M1 trace.
 
 **Moment 2 — getting the model to load**
 
