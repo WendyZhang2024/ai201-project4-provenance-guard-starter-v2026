@@ -380,18 +380,376 @@ reward.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. my own writing | ≤ 2 of 10 labeled high-confidence AI, each trial | 0/10 | 0/10 | 0/10 | **MET** |
+| 2. score spread | ≥ 3 of 4 pairs: AI ≥ 0.80 and human ≤ 0.35, each trial | 2/4 | 2/4 | 2/4 | **MISSED** |
+| 3. label coverage | all three labels appear in the 9-piece set, each trial | 3/3 | 3/3 | 3/3 | **MET** |
+| 4. appeal path | valid 200 + under_review + count; empty 400; unknown/mismatch 404 | 4/4 | 4/4 | 4/4 | **MET** |
+| 5. bad input | 400/400/413/400/400, no 500, rejection logged | 5/5 | 5/5 | 5/5 | **MET** |
 
 **Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+that produced it. Criteria 1, 2, 3 and 5 come from
+`results/run_2026-11-11_0238_before.md`, produced by `run_eval.py::write_report`
+from `scenarios.py::SCENARIOS`. Criterion 4 comes from the direct `/appeal`
+calls against `app.py::appeal`.
+
+**Criterion 1 — my own writing, trial 1**
 
 ```json
-
+[
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.6349,
+    "style_score": 0.2852,
+    "label": "We think this was probably written by a person.",
+    "sent": "As a fan of How It Works, I have a deep interest in astronomy. I first"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4268,
+    "model_score": 0.3466,
+    "style_score": 0.547,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Music is a miracle, it is the root and soul of my life. I found music "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4592,
+    "model_score": 0.1556,
+    "style_score": 0.9145,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "I conducted several independent research studies including attention e"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2822,
+    "model_score": 0.2709,
+    "style_score": 0.2991,
+    "label": "We think this was probably written by a person.",
+    "sent": "“Know Thyself” to me means embracing complexity: being both scientist "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.594,
+    "style_score": 0.2801,
+    "label": "We think this was probably written by a person.",
+    "sent": "“Odors have a power of persuasion stronger than that of words, appeara"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.1917,
+    "model_score": 0.2641,
+    "style_score": 0.0831,
+    "label": "We think this was probably written by a person.",
+    "sent": "“And, following my “perfume atlas,” people, too, seemed to carry notes"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2345,
+    "model_score": 0.2033,
+    "style_score": 0.2812,
+    "label": "We think this was probably written by a person.",
+    "sent": "”And so the opening sentence returns to me with a different weight. “O"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.3678,
+    "style_score": 0.4269,
+    "label": "We think this was probably written by a person.",
+    "sent": "At Columbia, through the lens of both STEM and humanity, I’ll be able "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.5625,
+    "style_score": 0.1206,
+    "label": "We think this was probably written by a person.",
+    "sent": "Apart from academics, the Twin Cities offers a world of creative explo"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6076,
+    "model_score": 0.6178,
+    "style_score": 0.5922,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "He told me that one of my piano arrangements had kept him company duri"
+  }
+]
 ```
+
+**Criterion 2 — score spread, trial 1** (pairs are texts 1–2, 3–4, 5–6, 7–8)
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8048,
+    "model_score": 0.8864,
+    "style_score": 0.6823,
+    "label": "We think this was probably generated with AI. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "The implementation of the proposed framework requires careful consider"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.6349,
+    "style_score": 0.2852,
+    "label": "We think this was probably written by a person.",
+    "sent": "As a fan of How It Works, I have a deep interest in astronomy. I first"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8,
+    "model_score": 0.881,
+    "style_score": 0.5603,
+    "label": "We think this was probably generated with AI. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Artificial intelligence has become an important part of modern life. I"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.594,
+    "style_score": 0.2801,
+    "label": "We think this was probably written by a person.",
+    "sent": "“Odors have a power of persuasion stronger than that of words, appeara"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6712,
+    "model_score": 0.7499,
+    "style_score": 0.5532,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Effective communication is essential in today's fast-paced world. It h"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4268,
+    "model_score": 0.3466,
+    "style_score": 0.547,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Music is a miracle, it is the root and soul of my life. I found music "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6746,
+    "model_score": 0.8532,
+    "style_score": 0.4066,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "The future of technology depends on responsible innovation. Companies "
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.3678,
+    "style_score": 0.4269,
+    "label": "We think this was probably written by a person.",
+    "sent": "At Columbia, through the lens of both STEM and humanity, I’ll be able "
+  }
+]
+```
+
+**Criterion 3 — label coverage, trial 1**
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.6349,
+    "style_score": 0.2852,
+    "label": "We think this was probably written by a person.",
+    "sent": "As a fan of How It Works, I have a deep interest in astronomy. I first"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.3,
+    "model_score": 0.594,
+    "style_score": 0.2801,
+    "label": "We think this was probably written by a person.",
+    "sent": "“Odors have a power of persuasion stronger than that of words, appeara"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4268,
+    "model_score": 0.3466,
+    "style_score": 0.547,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Music is a miracle, it is the root and soul of my life. I found music "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.7622,
+    "model_score": 0.8037,
+    "style_score": 0.7,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "I like my weekends. I do simple things: I play music. I cook. I watch "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6969,
+    "model_score": 0.7912,
+    "style_score": 0.5555,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "The implementation of the proposed framework requires careful consider"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6988,
+    "model_score": 0.77,
+    "style_score": 0.592,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Artificial intelligence is now a normal part of daily life. It is used"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8048,
+    "model_score": 0.8864,
+    "style_score": 0.6823,
+    "label": "We think this was probably generated with AI. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "The implementation of the proposed framework requires careful consider"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8,
+    "model_score": 0.881,
+    "style_score": 0.5603,
+    "label": "We think this was probably generated with AI. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Artificial intelligence has become an important part of modern life. I"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6712,
+    "model_score": 0.7499,
+    "style_score": 0.5532,
+    "label": "We couldn't make a confident call on this piece. If this is your own work, you can appeal and ask for a human review.",
+    "sent": "Effective communication is essential in today's fast-paced world. It h"
+  }
+]
+```
+
+**Criterion 4 — appeal path, trial 1**
+
+```json
+[
+  {
+    "check": "valid appeal",
+    "status": 200,
+    "body": {
+      "appeal_count": 1,
+      "content_id": "dd56910d-6941-424f-83e7-f5875ac5f446",
+      "message": "Thanks — a human will review this.",
+      "ok": true,
+      "status": "under_review"
+    }
+  },
+  {
+    "check": "empty reasoning",
+    "status": 400,
+    "body": {
+      "error": "bad_request",
+      "message": "reasoning is required and must be a non-empty string."
+    }
+  },
+  {
+    "check": "unknown content_id",
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "message": "No matching submission."
+    }
+  },
+  {
+    "check": "mismatched creator_id",
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "message": "No matching submission."
+    }
+  }
+]
+```
+
+**Criterion 5 — bad input, trial 1**
+
+```json
+[
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "(empty text)"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"creator_id\": \"eval_bad_missing\"}"
+  },
+  {
+    "status": 413,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "word word word word word word word word word word word word word word "
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"text\": null, \"creator_id\": \"eval_bad_null\"}"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "hi"
+  }
+]
+```
+
 
 **Diagnoses**
 
