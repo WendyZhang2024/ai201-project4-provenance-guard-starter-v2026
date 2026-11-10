@@ -58,7 +58,7 @@ The important seam is step 5: everything above it produces numbers, everything b
 
 **Why that might differ between human and AI writing:** A language model writes by repeatedly choosing a likely next token, so its output tends to be text the model finds easy to predict. Human writing is lumpier — odd word choices, abrupt turns, concrete details the model did not expect.
 
-**What it can't see:** Predictability is not authorship. The signal rewards common words in short, ordinary sentences, which is exactly how many real people write: second-language writers, younger writers, and anyone writing plainly on purpose. Dense, ornate prose often goes the other way and reads as human, because rare words are what the model fails to predict. The signal also shifts with text length and topic, and it truncates at 400 tokens: anything after the first 400 tokens is invisible, so appending human-style text or hiding AI content later can evade it. gpt2 is also English-centric; text in other languages often has very high perplexity and is read as human, which is a direct bypass. The people most likely to be accused are the ones with the least room to argue back.
+**What it can't see:** Predictability is not authorship. The signal rewards common words in short, ordinary sentences, which is exactly how many real people write: second-language writers, younger writers, and anyone writing plainly on purpose. Dense, ornate prose often goes the other way and reads as human, because rare words are what the model fails to predict. The signal also shifts with text length and topic, and it truncates at 400 tokens: anything after the first 400 tokens is invisible, so appending human-style text or hiding AI content later can evade it. gpt2 is also English-centric, so non-English and non-Latin text behaves unpredictably: in my attack run, Arabic (model 0.9064) and emoji-only text (0.9969) scored as very AI-like, not human. The people most likely to be accused are the ones with the least room to argue back.
 
 ### Signal two — the style signal
 
@@ -70,9 +70,9 @@ The important seam is step 5: everything above it produces numbers, everything b
 
 ### The combining rule
 
-**The rule:** A weighted average of the two signal scores, plus two symmetric gates. Both signals point the same way — higher means more AI. When they disagree, the weighted average usually pulls toward the unsure band. The AI gate is the exception on the high side: when the model signal is at least `0.85` and the style signal is at least `0.50`, the score is lifted to the AI floor (`0.80`); on the long-AI calibration input, `model_score = 0.8810` and `style_score = 0.5603` average to `0.7527`, and the gate lifts it to `0.8000`. The human gate is the exception on the low side: when the model signal is at most `0.65` and the style signal is at most `0.45`, the score is capped at `0.30`, so the human label is reachable. The human gate does not fire for the plain weekend sample (`model_score = 0.8037`), so that false positive stays in unsure.
+**The rule:** A weighted average of the two signal scores, plus two symmetric gates. Both signals point the same way — higher means more AI. When they disagree, the weighted average usually pulls toward the unsure band. The AI gate is the exception on the high side: when the model signal is at least `0.85` and the style signal is above `0.50`, the score is lifted to the AI floor (`0.80`); on the long-AI calibration input, `model_score = 0.8810` and `style_score = 0.5603` average to `0.7527`, and the gate lifts it to `0.8000`. The human gate is the exception on the low side: when the model signal is at most `0.65` and the style signal is at most `0.45`, the score is capped at `0.30`, so the human label is reachable. The human gate does not fire for the plain weekend sample (`model_score = 0.8037`), so that false positive stays in unsure.
 
-**The numbers:** weights `0.6 × model_score + 0.4 × style_score`; AI gate `model_score >= 0.85 and style_score >= 0.50` lifts to `0.80`; human gate `model_score <= 0.65 and style_score <= 0.45` caps at `0.30`; thresholds `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`. These are four-input design choices, not a statistical calibration; Unit 8 tests them on more inputs.
+**The numbers:** weights `0.6 × model_score + 0.4 × style_score`; AI gate `model_score >= 0.85 and style_score > 0.50` lifts to `0.80`; human gate `model_score <= 0.65 and style_score <= 0.45` caps at `0.30`; thresholds `HUMAN_THRESHOLD = 0.35`, `AI_THRESHOLD = 0.80`. Bands: human `0.00–0.35`, unsure `0.35–0.80`, AI `0.80–1.00`. These are four-input design choices, not a statistical calibration; Unit 8 tests them on more inputs.
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -197,6 +197,12 @@ This query returns the two entries for this submission; the earlier test rows re
 - *What came back:* A letter from a hypothetical plain-writing essayist whose own work was labeled high-confidence AI; they offered drafts, timestamps and notes, and asked how to appeal and whether the piece stays marked.
 - *What I changed:* I kept the 2/10 target, but rewrote the criterion's reason to name the cost: two of my ten pieces would produce that letter. The 2/10 is a target, not a measured rate; Unit 8 measures it. I also noted for M5 that the AI label should tell the writer how to appeal.
 
+**Moment 4 — diagnosing the attack run**
+
+- *What I asked for:* I gave it the 56-row table and the two signal scores and asked for three possible causes at different stages, without telling me which was most likely. I wanted hypotheses to test.
+- *What came back:* Three candidates — signal one collapsing under surface noise, signal two being gamed by the edits, and the human gate turning moderate scores into `human`. The style-only explanation did not survive the numbers I computed: even at style 1.0, EV02/EV06/EV07 stay below 0.80, so signal one is the binding constraint.
+- *What I changed:* I checked each candidate against `logs/audit.jsonl`, rejected the style-only explanation, and rewrote the diagnosis so the stage matches the binding cause; the gate is named as the amplifier, not the cause. I then chose the one measured change — the AI gate comparison `>=` to `>` — re-ran the attack set and the five criteria, and left the nine signal-one evasions in What's Still Broken.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
@@ -210,10 +216,12 @@ Two callers have to be liveable at once. A real writer revising their own work
 bursts three to five submissions in a minute and makes ten to thirty in a heavy
 day, so 10 a minute leaves about twice their burst and 200 a day leaves six
 times their day. A script mapping the 0.35 / 0.80 boundary needs hundreds of
-samples: at 10 a minute it needs half an hour per hundred, and 200 a day gives
-it a fifth of what it needs before it is shut out for the rest of the day. The
-daily cap is also the cost ceiling, since every `/submit` runs gpt2 on this
-laptop — 200 model calls a day per caller is affordable, thousands are not.
+samples: at 10 a minute that is ten minutes per hundred, and the 200-a-day cap
+stops it after about twenty minutes of sending, well short of what it needs.
+The daily cap is also the cost ceiling for an honest caller, since every
+`/submit` runs gpt2 on this laptop — 200 model calls a day per caller is
+affordable, thousands are not — but it does not bound a script that rotates
+`creator_id`.
 
 The trade is chosen, not hidden: the limit leans loose enough that a script gets
 slightly more boundary information, because the other failure is worse. A 429
@@ -339,9 +347,10 @@ side (`model_score ≤ 0.65`, `style_score ≤ 0.45`), and `0.30 ≤ 0.35` is th
 **How I marked it:** an evasion is BROKE when the label is not `ai`; a
 false_positive is BROKE when the label is `ai`; a prompt injection is BROKE
 only if the instruction changed the label text or the log; a malformed request
-is BROKE on a 5xx, an HTML error page, a 200 `ai` on non-prose, or a 200 that
-accepts input the route should have rejected (control characters,
-punctuation-only); the flood family is HELD if any row got a 429.
+is BROKE on a 5xx, an HTML error page, a 200 `ai` on non-prose, a 200 `ai` on
+a human text (a false positive, as in MF08), or a 200 that accepts input the
+route should have rejected (control characters, punctuation-only); the flood
+family is HELD if any row got a 429.
 
 **Ten audit log entries from the run**
 
@@ -771,24 +780,24 @@ calls against `app.py::appeal`.
 
 | Failure | Stage | Mechanism and evidence |
 |---|---|---|
-| **Criterion 2 (MISSED)** | signal two + the combining rule | `AI_GENERIC_1` 0.6712 (model 0.7499, style 0.5532) and `AI_GENERIC_2` 0.6746 (0.8532, 0.4066) never reach 0.80 because style contributes only 0.55/0.41; `MY_MUSIC` is 0.4268 (0.3466, 0.5470) because style 0.5470 keeps the human gate from firing (it needs style ≤0.45), so the average stays above 0.35. |
+| **Criterion 2 (MISSED)** | signal one (pair 3) and the combining rule (pair 4) | Pair 3: `AI_GENERIC_1` has model 0.7499, below the AI gate's 0.85, so it stays at 0.6712 (unsure); `MY_MUSIC` has style 0.5470 > 0.45, so the human gate cannot fire and it stays at 0.4268 (unsure). Pair 4: `AI_GENERIC_2` has model 0.8532 (≥ 0.85) but style 0.4066 (< 0.50), so the AI gate does not fire and the weighted average 0.6746 stays unsure. In both pairs the AI text fails to reach 0.80, so pairs 3 and 4 fail every trial. |
 | **EV01** | signal one | Typos raise perplexity → model 0.1635; style rises to 0.7924 because punctuation drops; combined 0.4151. The target says signal two, but TTR is excluded here, so the actual damage is signal one. |
-| **EV02** | signal two + the combining rule | Broken-up sentences lower sentence-length spread → style 0.4423; model 0.5943; the human gate (model ≤0.65, style ≤0.45) caps 0.5335 to 0.30. |
+| **EV02** | signal one + the combining rule | Model 0.5943 is already too low for `ai`: even at style 1.0 the average is 0.6×0.5943 + 0.4×1.0 = 0.7566 < 0.80. Broken-up sentences also lower style to 0.4423, so the human gate (model ≤0.65, style ≤0.45) turns what would have been `unsure` into a confident `human` (0.30). Signal one causes the break; the gate makes the label worse. |
 | **EV03** | signal one | The pasted quotation adds rare words → model 0.6662; style 0.6320; average 0.6525; no gate because model is above 0.65. |
 | **EV04** | signal one | Unusual words raise perplexity → model 0.6114; style stays high at 0.7841; combined 0.6805. |
 | **EV05** | signal one + the combining rule | The heavy human edit lowers model to 0.3212 and style to 0.3994; the human gate caps it at 0.30. |
-| **EV06** | signal two + the combining rule | The long/short sentence mix lowers style to 0.3750; model 0.5727; the human gate caps it at 0.30. |
-| **EV07** | signal two + the combining rule | Punctuation padding lowers style to 0.2500; model 0.5862; the human gate caps it at 0.30. |
+| **EV06** | signal one + the combining rule | Model 0.5727 is already too low for `ai`: even at style 1.0 the average is 0.6×0.5727 + 0.4×1.0 = 0.7436 < 0.80. The long/short sentence mix also lowers style to 0.3750, so the human gate (model ≤0.65, style ≤0.45) turns `unsure` into `human` (0.30). Signal one causes the break; the gate makes the label worse. |
+| **EV07** | signal one + the combining rule | Model 0.5862 is already too low for `ai`: even at style 1.0 the average is 0.6×0.5862 + 0.4×1.0 = 0.7517 < 0.80. Punctuation padding also lowers style to 0.2500, so the human gate (model ≤0.65, style ≤0.45) turns `unsure` into `human` (0.30). Signal one causes the break; the gate makes the label worse. |
 | **EV08** | signal one | The short text falls below the useful token window → model 0.2452; style 0.8232; combined 0.4764. |
 | **EV09** | signal one | The human opening occupies the first 400 tokens, so the AI body is invisible → model 0.7042; style 0.5689; combined 0.6501. |
 | **FP03** | signal one + signal two | Careful non-native prose uses plain words (model 0.8051) and even sentences (style 0.7949); both signals agree, and no gate fires because model is below 0.85; combined 0.801. |
 | **FP06** | the combining rule (AI gate) | Model 0.8814 and style 0.6339 satisfy the AI gate (model ≥0.85, style ≥0.50), so the score is lifted to 0.80 on a human text. |
 | **MF03** | the route | Control characters pass `strip()` and the length check; there is no printable/prose check. Model 0.0, style 0.75 → 0.30 human: the route accepted input it should have rejected. |
 | **MF04** | the route | Punctuation-only passes the same checks; model 0.0112, style 0.5 → 0.2067 human; accepted instead of rejected. |
-| **MF05** | signal one + the route | A 4,000-character single token is highly predictable to gpt2 (model 0.9976); the route has no distinct-word check; style 0.75 → 0.8986. |
+| **MF05** | signal one + the route | The 4,000-character string of one repeated character is split into hundreds of sub-word tokens that gpt2 predicts almost perfectly (model 0.9976); style is 0.75, so the weighted average is 0.8986 and the AI gate is not needed. |
 | **MF06** | signal two + the combining rule | Emoji-only text has no scoreable words, so `style_signal` returns its neutral 0.5; model 0.9969; the AI gate treats 0.5 as agreement and lifts it to 0.80. |
 | **MF07** | signal two + the combining rule | `words()` is Latin-only, so Arabic has no words and style returns 0.5; model 0.9064; the gate lifts it to 0.80. |
-| **MF08** | signal one | The 57k-character human story is truncated to its first 400 tokens; that opening is plain narrative and predictable (model 0.9876), style 0.6699 → 0.8605. |
+| **MF08** | signal one | The 60,000-character target (57,640 actual) is a human narrative; it is truncated to its first 400 tokens, and that opening is plain and predictable (model 0.9876), style 0.6699 → 0.8605. |
 
 **The pattern.** Nine of the seventeen breaks are evasion, and seven of those nine have a model score of 0.62 or lower — **signal one is the main vulnerability, not signal two.** The style score often moves the other way (0.79–0.82), because typos and broken sentences reduce punctuation and sentence-length spread. The attack set's `targets` column assumes a TTR-based style signal; this implementation excludes TTR, so the stated mechanism is often wrong. The human gate then amplifies four of those into a confident `human` (0.30). The false accusations are a separate cluster: human prose both signals read as AI (FP03/FP06), junk the route should have rejected (MF03/04/05), a long human text truncated to 400 tokens (MF08), and the style signal's neutral `0.5` treated as evidence (MF06/07).
 
@@ -796,38 +805,103 @@ calls against `app.py::appeal`.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** one comparison in `scoring.py::combine_signals`. The AI gate now requires `style_score > config.AI_GATE_STYLE` instead of `>=`. `0.5` is `style_signal`'s neutral fallback for text with no scoreable words, not evidence of AI style; the old gate treated it as agreement.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** MF06 and MF07. Emoji-only text and Arabic text both produce no scoreable words, so `style_signal` returns `0.5`; the old gate lifted their high model score to a confident `0.80`.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+`python run_attacks.py --set attack_set --label after` — same 56 attacks, 0 crashes, 2 × 429. Full report: `results/attack_run_2026-11-11_0425_after.md`.
 
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `306bd539-4a6b-44b9-9111-10e76b1a66da` | unsure | 0.415 | BROKE |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `36ee12fe-d8ce-4f61-ad8f-d62d722a1253` | human | 0.300 | BROKE |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `2a7ad575-1ab4-4274-bd01-65f8e23c84dc` | unsure | 0.652 | BROKE |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `e4bcb6be-aea1-42eb-ab57-7fd319b1e798` | unsure | 0.680 | BROKE |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `fa59c3a7-c811-404c-9316-fc45210d9f05` | human | 0.300 | BROKE |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `ce8592b4-eb2b-4607-8269-542b93fa1fd5` | human | 0.300 | BROKE |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `123925fc-7b32-40ce-8fff-23c2c0fae36c` | human | 0.300 | BROKE |
+| EV08 | evasion | signal one: text below the token window | 200 | `fd1974ba-1078-434b-a3aa-2fd1570608d3` | unsure | 0.476 | BROKE |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | `26467ed4-63d5-4741-95b3-d065fbf86280` | unsure | 0.650 | BROKE |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `d852b5ae-dcd3-4a79-abf3-a631c53eb773` | ai | 0.889 | HELD |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `ddb11559-94ae-4b0a-b4d6-dfe87141da24` | unsure | 0.631 | HELD |
+| FP02 | false_positive | human writing in a formal register | 200 | `002c6da8-e63d-49c5-a159-fd5533cda1d3` | unsure | 0.769 | HELD |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `fdb3441c-a00d-42b7-9c27-ac7a958c3864` | ai | 0.801 | BROKE |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `f2ee7661-90cf-49c7-89bd-7f64e3f2962c` | unsure | 0.796 | HELD |
+| FP05 | false_positive | technical documentation written by a person | 200 | `40de6e84-27e9-4ab1-aa29-c4345f4a5449` | unsure | 0.782 | HELD |
+| FP06 | false_positive | a person imitating a formal template | 200 | `399f56a4-ba23-4f2f-977a-aa80ae753367` | ai | 0.800 | BROKE |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `a086e48c-2ff5-419b-b89c-febccc549fb4` | unsure | 0.718 | HELD |
+| FP08 | false_positive | very short genuine human submission | 200 | `bc7b683c-ce61-4155-9907-6c42cdcb839f` | unsure | 0.485 | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `f4ff27cc-b1e3-49f9-afb4-6daa3fd0b7f9` | unsure | 0.512 | HELD |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `2cc4f316-2d8d-4581-b131-78734584f646` | human | 0.326 | HELD |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `99a2c78d-b096-4c40-8ceb-27698d283e84` | unsure | 0.646 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `a809d78b-a1ca-440e-b6e7-4dde9c27d809` | unsure | 0.551 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `25985e47-5ffe-45c0-8216-7a723b1cadb8` | human | 0.300 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `97969ab9-971b-4f88-8321-f5b1f25c3780` | unsure | 0.601 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | `—` | — | — | HELD |
+| MF02 | malformed | text is a single character | 400 | `—` | — | — | HELD |
+| MF03 | malformed | text is control characters | 200 | `48edd66f-4edf-47d8-9c12-e0283c710a8b` | human | 0.300 | BROKE |
+| MF04 | malformed | text is only punctuation | 200 | `0d7df898-a110-4009-892c-ffa40f10eac5` | human | 0.207 | BROKE |
+| MF05 | malformed | text is a very long single word | 200 | `34c99e7d-f4fe-4904-b1ce-50db6b19c3f4` | ai | 0.899 | BROKE |
+| MF06 | malformed | text is emoji only | 200 | `1a74b717-21b7-4c2f-803a-f55304c85f8c` | unsure | 0.798 | HELD |
+| MF07 | malformed | text is right-to-left script | 200 | `abd27bc0-691a-4978-b079-ac4febfb3119` | unsure | 0.744 | HELD |
+| MF08 | malformed | text is 60,000 characters | 200 | `9b3021b0-50e8-46c8-b4fa-6356aec67a13` | ai | 0.861 | BROKE |
+| RQ01 | malformed | no text field at all | 400 | `—` | — | — | HELD |
+| RQ02 | malformed | no creator_id | 400 | `—` | — | — | HELD |
+| RQ03 | malformed | text is a number | 400 | `—` | — | — | HELD |
+| RQ04 | malformed | text is a list | 400 | `—` | — | — | HELD |
+| RQ05 | malformed | text is null | 400 | `—` | — | — | HELD |
+| RQ06 | malformed | creator_id is an object | 400 | `—` | — | — | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | `—` | — | — | HELD |
+| RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — | HELD |
+| RQ09 | malformed | body is empty | 400 | `—` | — | — | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 400 | `—` | — | — | HELD |
+| RQ11 | malformed | body is JSON claiming to be plain text | 400 | `—` | — | — | HELD |
+| RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — | HELD |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `39a9a983-4862-428d-af4e-be133e04f90f` | human | 0.317 | HELD |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `8cd03bdf-3209-4282-8317-02488a2b575e` | human | 0.317 | HELD |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `9554646e-1e5a-4363-b90c-27067a1909a4` | human | 0.317 | HELD |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `2e2295b3-fb37-4c21-a4f1-22b33d4307e4` | human | 0.317 | HELD |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `770b2050-484a-4142-8b31-c28775e52746` | human | 0.317 | HELD |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 200 | `083b5fa3-a905-4038-b35d-5d33d02b8ed5` | human | 0.317 | HELD |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 200 | `b1f51533-bb41-49bb-aaa2-6e540b42c662` | human | 0.317 | HELD |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 200 | `66f76f12-3678-4533-9a87-8fd1687afdbc` | human | 0.317 | HELD |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 200 | `a4c4dd4c-fc36-4d54-89cf-9da395d9ca88` | human | 0.317 | HELD |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 200 | `22af8c20-b965-48a2-85c0-3e531609d3e5` | human | 0.317 | HELD |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
 
+**By family:** evasion **9/10 broke**, false_positive **2/8**, prompt_injection **0/6**, malformed **4/20**, flood **0/12**. Total **15/56 broke** (down from 17).
 
-**Did it help, and how do I know:**
+**Did it help, and how do I know:** Yes, exactly where the diagnosis said. MF06 moved from `ai` (0.800) to `unsure` (0.7981), and MF07 from `ai` (0.800) to `unsure` (0.7438). The broke count fell from 17 to 15, and the other 54 rows are unchanged. The five criteria are unchanged too: C1 0/10, C2 2/4, C3 3/3, C4 4/4, C5 5/5 (after run: `results/run_2026-11-11_0429_after.md`).
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+**What it cost:** a text whose style score is exactly `0.5` no longer gets the AI gate. For normal prose that is rare — `0.5` is the neutral fallback for text with no scoreable words — and if such a text has a model score of 0.85 or more it now lands `unsure` instead of `ai`. The change does nothing for the other 15 breaks.
 
+**Run log — after** (`python run_eval.py --label after`, same format; criterion 4 re-checked directly):
 
+| Criterion | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|
+| 1. my own writing | 0/10 | 0/10 | 0/10 | MET |
+| 2. score spread | 2/4 | 2/4 | 2/4 | **MISSED** |
+| 3. label coverage | 3/3 | 3/3 | 3/3 | MET |
+| 4. appeal path | 4/4 | 4/4 | 4/4 | MET |
+| 5. bad input | 5/5 | 5/5 | 5/5 | MET |
 
 ---
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+| Still broken | What I'd do | Why I stopped |
+|---|---|---|
+| **EV01–EV09** | Redesign signal one so surface noise cannot collapse it: normalise spelling before scoring, score several overlapping windows instead of the first 400 tokens, or use a model that is less English-centric. | The unit allows one change, and this is a signal rewrite, not a tuning change. I chose the gate fix because it was clean and measurable; the nine evasion rows stay broken. |
+| **FP03 / FP06** | Replace the style signal with one that separates careful/formal human prose from AI prose, and add more non-native and formal human writing to the calibration set. | Lowering the AI line would flag more real writers (the project's expensive error); raising it would lose the AI samples at 0.80–0.85. No threshold separates these two cases, so a different number is not the fix. |
+| **MF03 / MF04** | Add a route check that rejects control characters and punctuation-only input with 400 before the signals see it. | The rule is easy to get wrong for legitimate short, emoji or non-Latin submissions, and the harm is low: both currently return `human`, not an accusation. I had already used my one change. |
+| **MF05** | Require at least N whitespace-separated word tokens at the route. | It would also reject legitimate long identifiers and URLs, and a 4,000-character string of one repeated character is rare in real submissions. |
+| **MF08** | Score the text in overlapping 400-token windows and take the maximum, or score the whole text. | It multiplies the model cost per request, and I ran out of time after the one measured change. |
+| **Criterion 2** | Add a signal that actually separates generic AI from human writing. | The current style signal ranks `AI_GENERIC_2` (0.4066) *below* the human `FP07` (0.4718); no threshold or weight fixes an ordering error. It needs a different feature, not a different number. |
 
-
-
-**The trade I'd make if this ran for real:**
-
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
-
-
+**The trade I'd make if this ran for real:** If this ran for real, I would widen the unsure band — raise the AI line to about 0.85 — so fewer real writers are accused, and tell the site they will miss more AI text. The writer pays less; the site pays in undetected AI, which is the side the project says should pay.
 
 <!-- ═════════════════════════════════════════════════════════════════════
 

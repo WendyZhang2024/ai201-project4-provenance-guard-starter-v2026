@@ -47,8 +47,8 @@ def combine_signals(model_score: float, style_score: float) -> float:
         write it down. That case is what this rule exists to handle.
 
     The implemented rule is a 0.6/0.4 weighted average plus two gates. When the
-    model signal is at least `config.AI_GATE_MODEL` and the style signal is at
-    least `config.AI_GATE_STYLE`, the score is lifted to `config.AI_GATE_FLOOR`,
+    model signal is at least `config.AI_GATE_MODEL` and the style signal is
+    above `config.AI_GATE_STYLE`, the score is lifted to `config.AI_GATE_FLOOR`,
     the bottom of the AI band. The human gate is symmetric: when the model
     signal is at most `config.HUMAN_GATE_MODEL` and the style signal at most
     `config.HUMAN_GATE_STYLE`, the score is capped at `config.HUMAN_GATE_CEILING`
@@ -60,7 +60,11 @@ def combine_signals(model_score: float, style_score: float) -> float:
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
 
-    if model_score >= config.AI_GATE_MODEL and style_score >= config.AI_GATE_STYLE:
+    # `>` not `>=`: 0.5 is `style_signal`'s neutral fallback when there are no
+    # scoreable words (emoji, non-Latin script), not evidence of AI style.
+    # Letting 0.5 satisfy the gate turned "no style information" into agreement
+    # and produced confident AI labels for MF06/MF07.
+    if model_score >= config.AI_GATE_MODEL and style_score > config.AI_GATE_STYLE:
         score = max(score, config.AI_GATE_FLOOR)
     elif (
         model_score <= config.HUMAN_GATE_MODEL
