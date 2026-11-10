@@ -386,6 +386,8 @@ reward.
 | 4. appeal path | valid 200 + under_review + count; empty 400; unknown/mismatch 404 | 4/4 | 4/4 | 4/4 | **MET** |
 | 5. bad input | 400/400/413/400/400, no 500, rejection logged | 5/5 | 5/5 | 5/5 | **MET** |
 
+**How I decided each verdict:** C1 is MET because every trial has 0 of 10 AI labels (target ≤2). C2 is MISSED because pairs 3 and 4 fail in every trial, so it is 2/4 against a ≥3/4 target. C3 is MET because human, unsure and ai each appear in every trial. C4 is MET because all four appeal checks pass in all three trials. C5 is MET because every trial returns 400/400/413/400/400, none is a 500, and the log has 15 `eval_bad_*` rejection entries.
+
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it. Criteria 1, 2, 3 and 5 come from
 `results/run_2026-11-11_0238_before.md`, produced by `run_eval.py::write_report`
@@ -767,7 +769,28 @@ calls against `app.py::appeal`.
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
+| Failure | Stage | Mechanism and evidence |
+|---|---|---|
+| **Criterion 2 (MISSED)** | signal two + the combining rule | `AI_GENERIC_1` 0.6712 (model 0.7499, style 0.5532) and `AI_GENERIC_2` 0.6746 (0.8532, 0.4066) never reach 0.80 because style contributes only 0.55/0.41; `MY_MUSIC` is 0.4268 (0.3466, 0.5470) because style 0.5470 keeps the human gate from firing (it needs style ≤0.45), so the average stays above 0.35. |
+| **EV01** | signal one | Typos raise perplexity → model 0.1635; style rises to 0.7924 because punctuation drops; combined 0.4151. The target says signal two, but TTR is excluded here, so the actual damage is signal one. |
+| **EV02** | signal two + the combining rule | Broken-up sentences lower sentence-length spread → style 0.4423; model 0.5943; the human gate (model ≤0.65, style ≤0.45) caps 0.5335 to 0.30. |
+| **EV03** | signal one | The pasted quotation adds rare words → model 0.6662; style 0.6320; average 0.6525; no gate because model is above 0.65. |
+| **EV04** | signal one | Unusual words raise perplexity → model 0.6114; style stays high at 0.7841; combined 0.6805. |
+| **EV05** | signal one + the combining rule | The heavy human edit lowers model to 0.3212 and style to 0.3994; the human gate caps it at 0.30. |
+| **EV06** | signal two + the combining rule | The long/short sentence mix lowers style to 0.3750; model 0.5727; the human gate caps it at 0.30. |
+| **EV07** | signal two + the combining rule | Punctuation padding lowers style to 0.2500; model 0.5862; the human gate caps it at 0.30. |
+| **EV08** | signal one | The short text falls below the useful token window → model 0.2452; style 0.8232; combined 0.4764. |
+| **EV09** | signal one | The human opening occupies the first 400 tokens, so the AI body is invisible → model 0.7042; style 0.5689; combined 0.6501. |
+| **FP03** | signal one + signal two | Careful non-native prose uses plain words (model 0.8051) and even sentences (style 0.7949); both signals agree, and no gate fires because model is below 0.85; combined 0.801. |
+| **FP06** | the combining rule (AI gate) | Model 0.8814 and style 0.6339 satisfy the AI gate (model ≥0.85, style ≥0.50), so the score is lifted to 0.80 on a human text. |
+| **MF03** | the route | Control characters pass `strip()` and the length check; there is no printable/prose check. Model 0.0, style 0.75 → 0.30 human: the route accepted input it should have rejected. |
+| **MF04** | the route | Punctuation-only passes the same checks; model 0.0112, style 0.5 → 0.2067 human; accepted instead of rejected. |
+| **MF05** | signal one + the route | A 4,000-character single token is highly predictable to gpt2 (model 0.9976); the route has no distinct-word check; style 0.75 → 0.8986. |
+| **MF06** | signal two + the combining rule | Emoji-only text has no scoreable words, so `style_signal` returns its neutral 0.5; model 0.9969; the AI gate treats 0.5 as agreement and lifts it to 0.80. |
+| **MF07** | signal two + the combining rule | `words()` is Latin-only, so Arabic has no words and style returns 0.5; model 0.9064; the gate lifts it to 0.80. |
+| **MF08** | signal one | The 57k-character human story is truncated to its first 400 tokens; that opening is plain narrative and predictable (model 0.9876), style 0.6699 → 0.8605. |
 
+**The pattern.** Nine of the seventeen breaks are evasion, and seven of those nine have a model score of 0.62 or lower — **signal one is the main vulnerability, not signal two.** The style score often moves the other way (0.79–0.82), because typos and broken sentences reduce punctuation and sentence-length spread. The attack set's `targets` column assumes a TTR-based style signal; this implementation excludes TTR, so the stated mechanism is often wrong. The human gate then amplifies four of those into a confident `human` (0.30). The false accusations are a separate cluster: human prose both signals read as AI (FP03/FP06), junk the route should have rejected (MF03/04/05), a long human text truncated to 400 tokens (MF08), and the style signal's neutral `0.5` treated as evidence (MF06/07).
 
 ---
 
