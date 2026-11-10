@@ -98,13 +98,25 @@ AI_THRESHOLD = 0.80
 
 
 # ─── Rate limiting (UNIT 8) ──────────────────────────────────────────────────
-# Off in unit 7. You turn it on and choose the numbers in unit 8, Milestone 1.
+# ON for unit 8. The two numbers answer the brief's two people: a real writer
+# submitting their own work a few times an hour, and a script sending a
+# thousand variations to map the thresholds.
 #
-# Think about two people: a real writer submitting their own work a few times
-# an hour, and a script sending a thousand variations to map your thresholds.
-# Your README has to say why your numbers and not others.
+# 10/minute — a writer revising and resubmitting bursts at most 3–5 times a
+#   minute, so 10 leaves about 2x headroom. A script mapping the 0.35 / 0.80
+#   boundary needs hundreds of samples; at 10 a minute it would need half an
+#   hour per hundred, and it hits the wall on its first burst.
+# 200/day — a writer's heavy day is 10–30 submissions, so 200 is 6x their load.
+#   It caps a slow mapping run at 200 boundary samples a day, a fifth of what
+#   it needs, and bounds the model cost: every /submit runs gpt2.
+#
+# The trade this picks: a script gets slightly more boundary information rather
+# than a writer being blocked mid-draft. A 429 mid-revision is its own harm.
+#
+# The run of status codes behind these numbers is in the README's Rate Limiting
+# section, produced by `run_attacks.py --flood 15`.
 
-RATE_LIMITING_ENABLED = os.getenv("AI201_RATE_LIMITS", "0") == "1"
+RATE_LIMITING_ENABLED = True
 
 RATE_LIMIT_PER_MINUTE = 10
 RATE_LIMIT_PER_DAY = 200

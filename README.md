@@ -203,24 +203,71 @@ This query returns the two entries for this submission; the earlier test rows re
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 10 per minute, 200 per day
 
 **Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+Two callers have to be liveable at once. A real writer revising their own work
+bursts three to five submissions in a minute and makes ten to thirty in a heavy
+day, so 10 a minute leaves about twice their burst and 200 a day leaves six
+times their day. A script mapping the 0.35 / 0.80 boundary needs hundreds of
+samples: at 10 a minute it needs half an hour per hundred, and 200 a day gives
+it a fifth of what it needs before it is shut out for the rest of the day. The
+daily cap is also the cost ceiling, since every `/submit` runs gpt2 on this
+laptop — 200 model calls a day per caller is affordable, thousands are not.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+The trade is chosen, not hidden: the limit leans loose enough that a script gets
+slightly more boundary information, because the other failure is worse. A 429
+mid-revision costs that writer the submission itself, and this project exists
+because a wrong accusation costs the person on the other end more than a missed
+detection costs the site.
+
+Two limits on the numbers. The flood below proves the per-minute limit; the
+daily one is reasoned from those two load profiles, not measured, because
+proving it would take 200 timed submissions. And the storage is `memory://`, so
+a restart forgets every count and two copies of the service would not share
+limits. That is right for one laptop and wrong for anything real.
+
+**What a caller counts as:** `creator_id` when the body carries a non-empty
+string, otherwise the caller's address (`app.py::rate_limit_key`). The two keys
+fail differently, which is why the hybrid is worth naming:
+
+- Per address alone counts one household, dorm or classroom as one caller, and
+  it would also have blocked my own `run_eval.py`, which sends thirty-odd
+  submissions in about a minute from one machine.
+- Per creator alone is free to evade: a script that changes `creator_id` on
+  every request looks like a thousand different writers.
+- The fallback is the seam. A body that is not JSON (`Content-Type:
+  text/plain`, say) carries no usable `creator_id`, so it lands in the address
+  bucket. And every row of the attack set submits as `attacker_<id>`, so a full
+  attack run never trips the limiter; only the `flood_same_creator` family does.
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
+`python run_attacks.py --flood 15`, fifteen submissions as `flood_tester`:
 
+```text
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
 ```
 
+Ten got through and five were rejected. `run_attacks.py::run_flood` wrote the
+same run to `results/flood_2026-11-05_1044.md`.
+
+The rejections are in the log, which is the point — an attack visible only as an
+absence is one nobody finds:
+
+```json
+{"creator_id": "flood_tester", "event": "rejected", "limit": "10 per 1 minute", "reason": "rate_limited", "status": "rejected", "timestamp": "2026-11-05T02:44:12+00:00"}
+```
+
+And three ordinary submissions afterwards, read back with `GET /log`. The first
+one is reconstructible from the entry alone: `0.6 × 0.4154 + 0.4 × 0.3527 =
+0.3903`, the human gate caps it at `0.30` because both signals sit on the human
+side (`model_score ≤ 0.65`, `style_score ≤ 0.45`), and `0.30 ≤ 0.35` is the
+`human` label. The other two in that batch came back `ai` at `0.8000` and
+`0.8048`.
+
+```json
+{"combined_score": 0.3, "content_id": "cd0699a0-12a2-4ee7-875e-5d8f03dffdc4", "creator_id": "log_check_1", "guess": "human", "label": "We think this was probably written by a person.", "model_score": 0.4154, "status": "decided", "style_score": 0.3527, "timestamp": "2026-11-05T02:44:24+00:00"}
 ```
 
 ---
