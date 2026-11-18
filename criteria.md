@@ -185,3 +185,13 @@ by moving the load out of the request path.
 `python capstone_eval.py start --label before` three times in a fresh copy for criteria 4 and 5,
 then `python capstone_eval.py report --label before`. The sets it sends are in the script, so
 someone else can rerun it without asking me which texts I meant.
+
+> **Added after the runs, 2026-11-18.** Five targets above were fixed before the first trial and no
+> number was moved afterwards. Four passages were edited later, and this note is the record of it:
+> the opening line, which originally said nothing of the extension had run (too strong — the build
+> came first, which is the course's own order); criterion 1's target sentence, which now says the
+> count has to hold in each of three trials; criterion 2's reason, which now explains where the
+> 100 ms comes from instead of asserting a jitter figure I could not point at; and criterion 5,
+> which now says which moment the 3 seconds is measured from. The one measured number inside the
+> text — the 6.1 ms worst gap in criterion 2 — was written in after the run, which is why this note
+> exists rather than a claim that nothing changed. One figure drifted as well: criterion 5's reason says a warm request is 0.3 s, which was the figure when it was written and is 139.7 ms in the after run. The target itself never moved.
