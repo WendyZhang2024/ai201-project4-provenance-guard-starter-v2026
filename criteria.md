@@ -186,8 +186,8 @@ by moving the load out of the request path.
 then `python capstone_eval.py report --label before`. The sets it sends are in the script, so
 someone else can rerun it without asking me which texts I meant.
 
-> **Added after the runs, 2026-11-18.** Five targets above were fixed before the first trial and no
-> number was moved afterwards. Four passages were edited later, and this note is the record of it:
+> **Added after the runs, 2026-11-18.** The five criteria above were written and saved before any
+> trial ran, and no target was moved afterwards. Four passages were edited later, and this note is the record of it:
 > the opening line, which originally said nothing of the extension had run (too strong — the build
 > came first, which is the course's own order); criterion 1's target sentence, which now says the
 > count has to hold in each of three trials; criterion 2's reason, which now explains where the
