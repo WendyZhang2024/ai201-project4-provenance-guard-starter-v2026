@@ -24,6 +24,7 @@ Routes:
     GET  /health      is the service up, and is the model loaded
 """
 
+import time
 import uuid
 
 from flask import Flask, jsonify, request
@@ -31,6 +32,7 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import observe
 import scoring
 import stylometry
 
@@ -153,122 +155,125 @@ def health():
 
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
+def _creator_of(payload) -> str:
+    """The name to log an attempt under, before we know whether it is valid."""
+    creator = payload.get("creator_id") if isinstance(payload, dict) else None
+    return creator if isinstance(creator, str) and creator.strip() else "unknown"
+
+
+def _text_of(payload) -> str:
+    """Whatever was sent as text, even if it is not usable."""
+    text = payload.get("text") if isinstance(payload, dict) else None
+    return text if isinstance(text, str) else ""
+
+
+def _validate(payload):
+    """
+    The four rules, in one place, with no Flask in them.
+
+    Either (text, creator_id) on success, or (None, (status, error, reason,
+    message)) on rejection. Pulled out of the route so the rules read as four
+    lines and so the route has room for the record this unit adds.
+
+    `error` is what the caller sees, `reason` is what the audit log keeps. They
+    differ on the two 400s on purpose: the log says which rule fired, the caller
+    gets the one word unit 8's contract already used.
+    """
+    if not isinstance(payload, dict):
+        return None, (400, "bad_request", "invalid_json",
+                      "Send a JSON object with text and creator_id.")
+
+    text = payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return None, (400, "bad_request", "missing_or_empty_text",
+                      "text is required and must be a non-empty string.")
+
+    if len(text) > config.MAX_TEXT_CHARS:
+        return None, (413, "text_too_large", "text_too_large",
+                      f"text must be at most {config.MAX_TEXT_CHARS:,} characters.")
+
+    creator_id = payload.get("creator_id")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return None, (400, "bad_request", "missing_creator_id",
+                      "creator_id is required and must be a non-empty string.")
+
+    return text, creator_id
+
+
+def _log(event, status, t0, c0, **fields):
+    """
+    One line in logs/requests.jsonl, whatever the outcome.
+
+    The timestamp and the duration are computed here so no exit has to remember
+    to do it, and the failures come through the same function as the successes:
+    an outcome that only exists when nothing went wrong is the absence unit 8
+    spent a whole milestone learning to see.
+    """
+    observe.record(
+        request_id=fields.pop("request_id", None),
+        creator_id=fields.pop("creator_id", "unknown"),
+        event=event,
+        status=status,
+        t_total_ms=(time.perf_counter() - t0) * 1000,
+        cpu_ms=(time.process_time() - c0) * 1000,
+        **fields,
+    )
+
+
 @app.post("/submit")
 @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
-    """
-    Take a piece of text, decide about it, log the decision, answer.
-    Milestone 3: route, one signal, audit log. M4/M5 extend it.
-
-    Expects JSON:
-        {"text": "...", "creator_id": "..."}
-
-    Should return JSON with, at minimum:
-        {"content_id": "...", "guess": "...", "confidence": 0.0, "label": "...",
-         "model_score": 0.0, "style_score": 0.0}
-
-    ⚠️ **Both signal scores go in the response, not just the log.** Unit 8's
-    `run_attacks.py` and `run_eval.py` read `model_score` and `style_score`
-    straight off this response and put them in your reports. Leave them out and
-    every row of next unit's evidence says `null` — which is exactly the
-    diagnostic you need to name a stage and a mechanism. You do not want to
-    find that out after running the attack set.
-
-    ─────────────────────────────────────────────────────────────────────────
-    Build it in three passes. Do not skip ahead — the ordering is how you tell
-    a broken route from a broken signal.
-
-    **Milestone 3 — the route answers.**
-      1. Return a hardcoded response. Confirm `curl` gets it back before you
-         add any logic at all.
-      2. Then pull `text` and `creator_id` out of the payload.
-      3. Then call ONE signal — `detector.model_signal(text)` — and put the
-         real number in. Leave confidence and label as placeholders.
-      4. Log every submission with `audit.log_decision(...)`. The content_id
-         matters: `/appeal` needs it, and a student who skips it rebuilds this
-         whole flow later.
-
-    **Milestone 4 — the second signal and the score.**
-      5. Add `stylometry.style_signal(text)`.
-      6. Combine them with `scoring.combine_signals(...)`.
-      7. Log BOTH signal scores alongside the combined one, and put them in the
-         response too. Next unit you can't diagnose anything without them.
-
-    **Milestone 5 — the label.**
-      8. `scoring.score_to_label(...)` and put the real label in the response.
-
-    ─────────────────────────────────────────────────────────────────────────
-    Worth deciding early, because unit 8's attack set will decide it for you:
-    what should this do when `text` is missing, empty, or enormous? A crash on
-    a malformed input is one of the most common real failures there is.
-    """
+    """Validate, score, record, answer — four steps, in that order."""
+    t0, c0 = time.perf_counter(), time.process_time()
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        audit.log_rejection(creator_id="unknown", reason="invalid_json")
-        return jsonify({
-            "error": "bad_request",
-            "message": "Send a JSON object with text and creator_id.",
-        }), 400
+    text, detail = _validate(payload)
 
-    text = payload.get("text")
-    creator_id = payload.get("creator_id")
+    if text is None:
+        status, error, reason, message = detail
+        extra = ({"text_length": len(_text_of(payload))}
+                 if reason == "text_too_large" else {})
+        audit.log_rejection(creator_id=_creator_of(payload), reason=reason, **extra)
+        _log("rejected", status, t0, c0, creator_id=_creator_of(payload),
+             text=_text_of(payload), reason=reason)
+        return jsonify({"error": error, "message": message}), status
 
-    if not isinstance(text, str) or not text.strip():
-        audit.log_rejection(
-            creator_id=creator_id if isinstance(creator_id, str) else "unknown",
-            reason="missing_or_empty_text",
-        )
-        return jsonify({
-            "error": "bad_request",
-            "message": "text is required and must be a non-empty string.",
-        }), 400
-
-    if len(text) > 100_000:
-        audit.log_rejection(
-            creator_id=creator_id if isinstance(creator_id, str) else "unknown",
-            reason="text_too_large",
-            text_length=len(text),
-        )
-        return jsonify({
-            "error": "text_too_large",
-            "message": "text must be at most 100,000 characters.",
-        }), 413
-
-    if not isinstance(creator_id, str) or not creator_id.strip():
-        audit.log_rejection(creator_id="unknown", reason="missing_creator_id")
-        return jsonify({
-            "error": "bad_request",
-            "message": "creator_id is required and must be a non-empty string.",
-        }), 400
-
+    creator_id = detail
     content_id = str(uuid.uuid4())
+    was_cold = detector._model is None
+    t_model_ms = 0.0
 
     try:
+        t = time.perf_counter()
         model_score = detector.model_signal(text)
+        t_model_ms = (time.perf_counter() - t) * 1000
     except detector.DetectorUnavailable as exc:
+        _log("error", 500, t0, c0, request_id=content_id, creator_id=creator_id,
+             text=text, reason="detector_unavailable", t_model_ms=t_model_ms)
         audit.log_rejection(creator_id=creator_id, reason="detector_unavailable")
         return jsonify({"error": "internal", "message": str(exc)}), 500
     except ValueError as exc:
+        _log("rejected", 400, t0, c0, request_id=content_id, creator_id=creator_id,
+             text=text, reason="text_too_short", t_model_ms=t_model_ms)
         audit.log_rejection(creator_id=creator_id, reason="text_too_short")
         return jsonify({"error": "bad_request", "message": str(exc)}), 400
 
-    # Milestone 4: second signal and combined score.
+    t = time.perf_counter()
     style_score = stylometry.style_signal(text)
-    confidence = scoring.combine_signals(model_score, style_score)
+    t_style_ms = (time.perf_counter() - t) * 1000
 
-    # Milestone 5: the score becomes a guess and a sentence a reader sees.
+    confidence = scoring.combine_signals(model_score, style_score)
     guess, label = scoring.score_to_label(confidence)
 
     audit.log_decision(
-        content_id=content_id,
-        creator_id=creator_id,
-        guess=guess,
-        model_score=model_score,
-        style_score=style_score,
-        combined_score=confidence,
-        label=label,
-        status="decided",
+        content_id=content_id, creator_id=creator_id, guess=guess,
+        model_score=model_score, style_score=style_score,
+        combined_score=confidence, label=label, status="decided",
     )
+    _log("decided", 200, t0, c0, request_id=content_id, creator_id=creator_id,
+         text=text, guess=guess, confidence=confidence,
+         model_score=model_score, style_score=style_score,
+         t_model_ms=t_model_ms, t_style_ms=t_style_ms,
+         t_load_ms=(detector._load_ms if was_cold else 0.0))
 
     return jsonify({
         "content_id": content_id,
@@ -278,7 +283,6 @@ def submit():
         "model_score": model_score,
         "style_score": style_score,
     })
-
 
 @app.post("/appeal")
 def appeal():
@@ -380,6 +384,12 @@ def get_log():
     limit = request.args.get("limit", type=int)
     entries = audit.read_entries(limit=limit)
     return jsonify({"count": len(entries), "entries": entries})
+
+
+@app.get("/stats")
+def stats():
+    """The aggregate over the request log: count, p50, p95, cost."""
+    return jsonify(observe.summary())
 
 
 def main():

@@ -26,6 +26,12 @@ PORT = int(os.getenv("PORT", "5000"))
 # anywhere else — so it turns itself off the moment HOST isn't loopback.
 DEBUG = os.getenv("AI201_DEBUG", "1") == "1" and HOST in ("127.0.0.1", "localhost")
 
+# The size limit a caller can hit. It is part of the public contract — the 413
+# message quotes it — so it lives here next to the other tunables instead of as
+# a literal inside app.py's validation, where the message repeated the number a
+# second time and the two could drift apart.
+MAX_TEXT_CHARS = 100_000
+
 
 # ─── The local model ─────────────────────────────────────────────────────────
 # Your first signal runs a language model ON YOUR OWN MACHINE. No account, no

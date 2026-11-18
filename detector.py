@@ -42,11 +42,13 @@ for yourself where it lands.
 """
 
 import math
+import time
 
 import config
 
 _model = None
 _tokenizer = None
+_load_ms = 0.0        # how long the last cold load took; 0 until it happens
 
 
 class DetectorUnavailable(RuntimeError):
@@ -55,10 +57,14 @@ class DetectorUnavailable(RuntimeError):
 
 def _load():
     """Load the model once and keep it. First call downloads ~550 MB."""
-    global _model, _tokenizer
+    global _model, _tokenizer, _load_ms
     if _model is not None:
         return _model, _tokenizer
 
+    # Timed from here, not from the weights: the first request after a start
+    # pays for the import too, and the record has to be able to say which of
+    # the two stages that time belonged to.
+    t0 = time.perf_counter()
     try:
         import torch  # noqa: F401
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -78,6 +84,7 @@ def _load():
             f"The first run downloads about 550 MB — check your connection and "
             f"that you have disk space free."
         ) from exc
+    _load_ms = (time.perf_counter() - t0) * 1000
 
     return _model, _tokenizer
 
@@ -90,9 +97,12 @@ def perplexity(text: str) -> float:
     but that range shifts with topic and length, which is one reason the raw
     number isn't what you score on.
     """
-    import torch
-
     model, tokenizer = _load()
+
+    # Imported after the load, so that the first request's torch import is
+    # counted as load time rather than as scoring time. It is already cached
+    # by the time `_load` returns.
+    import torch
 
     encoded = tokenizer(
         text,
