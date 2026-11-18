@@ -944,8 +944,9 @@ calls against `app.py::appeal`.
 
 **What This Extends**
 
-`ai201-project4-provenance-guard-starter-v2026` — the Provenance Guard service from units 7 and 8.
-It turns a submission into a label and writes an audit record of that decision. What is new this unit
+`ai201-project4-provenance-guard-starter-v2026` — Provenance Guard, my project 4: the submission
+classifier built in units 7 and 8. It turns a submission into a label and writes an audit record of
+that decision. What is new this unit
 is the operational layer around the decision: a per-request record carrying the input, the output and
 the duration; a stage breakdown showing where a request's time went; a measured cost per request; and
 a run path documented well enough that someone else can start the service from a clean checkout.
@@ -960,8 +961,293 @@ Out of scope, in three parts:
 1. **No new detection capability.** `detector.model_signal`, `stylometry.style_signal` and the
    0.6/0.4 combining rule are untouched. Unit 8's diagnosis points at signal one, and fixing that
    is a detector rewrite — the work this unit's short build half cannot hold.
-2. **No hosted deployment.** About 1.1 GB of resident memory against a 512 MB free tier, with no
+2. **No hosted deployment.** About 870 MB of resident memory against a 512 MB free tier, with no
    persistent disk for the 525 MB of weights. The run path is Path B, and the deliverable is the
-   committed run record produced by the documented start command. The arithmetic is in Running It.
+   committed run record produced by the documented start command. The arithmetic is in `RUNNING.md`.
 3. **No second measured improvement.** One change, measured, is the requirement. The stretch items
    are not attempted, and nothing here claims them.
+
+**Running It**
+
+Path B — local, with logs. The whole run path is in [`RUNNING.md`](RUNNING.md) § *Path B — the run
+path*: clone, venv, pinned packages, the 525 MB model, and the `HF_HOME` step a reader on another
+machine will hit. The command is `python app.py`, and it serves on `http://127.0.0.1:5000`.
+
+There is no URL, and the arithmetic is the reason:
+
+| what has to be resident | size |
+|---|---|
+| `torch`, CPU build, plus its libraries | ~250 MB |
+| `gpt2` weights, fp32 | 525 MB on disk, loaded into memory to score |
+| Flask, Flask-Limiter, this code | ~40 MB |
+| **measured RSS while scoring** | **~870 MB**, peak 887 MB (`Get-Process`) |
+| a free hosting tier | **512 MB**, with no persistent disk |
+
+870 MB against 512 MB is 1.7× over before the first request arrives, and the free disk is ephemeral,
+so the 525 MB would be fetched again after every idle spin-down. Path B is not the lesser option
+here; it is the only one that runs.
+
+**The fresh-copy test.** A directory holding only this repository's files, with its own empty `logs/`, was started three times. It is a copy of the files rather than a `git clone` — git could not run in the shell this session used — so it tests the code and the document, not the clone step. Each start answered `/health` with `"ok": true` and one `/submit` with a 200, and the copy's
+own `logs/requests.jsonl` counted 1, then 2, then 3. It never wrote into this repository's log —
+which is what makes it a test rather than a demonstration. Output:
+`results/capstone_before_2026-11-18_0900.md`.
+
+**Instrumentation**
+
+`observe.py::record` writes one JSON line per request to `logs/requests.jsonl`, on every exit from
+`/submit` — decided, rejected, or errored. The fields:
+
+| field | what it is |
+|---|---|
+| `ts` | UTC timestamp, millisecond precision |
+| `request_id` | the `content_id` the response carried, so a line can be joined to a decision |
+| `creator_id` | who sent it, or `unknown` when the body never carried one |
+| `event` | `decided`, `rejected` or `error` |
+| `status` | the HTTP status the caller actually got |
+| `input_sha256` | first 16 hex characters of the SHA-256 of the text |
+| `input_chars` | its length |
+| `input_preview` | the first 80 characters |
+| `output_guess` / `output_confidence` | the label and the number behind it |
+| `model_score` / `style_score` | both signal scores, not just the verdict |
+| `t_total_ms` | the whole request, measured in the route |
+| `t_model_ms` / `t_style_ms` | the two signals, measured around each call |
+| `t_load_ms` | model load, when the load happened inside this request |
+| `cpu_ms` | process CPU time for the request |
+| `reason` | which rule rejected it, when it was rejected |
+
+**Why a hash and 80 characters, not the text.** This service handles other people's writing. The
+appeal path exists because a wrong label costs the writer something, and a log that keeps the whole
+submission is a second copy of the thing the appeal is protecting. The hash is enough to match a
+record to an input; the preview is enough to see what it was about.
+
+**Why both signal scores.** Unit 8's best evidence came from keeping `model_score` and
+`style_score` rather than the label: it is what made "even at style 1.0 this could not reach 0.80"
+possible to say. A record that keeps only the verdict throws that away at the last step, so the same
+rule applies one layer down — from these three numbers a reader can re-derive the gate by hand.
+
+**Ten records from one session** (7 decided, 3 rejected; the rejected ones are the point):
+
+```text
+{"ts": "2026-11-18T01:01:55.285+00:00", "request_id": "4fdb89f4-5cca-485d-a796-bc006c2e74a5", "creator_id": "capafter1_a", "event": "decided", "status": 200, "input_sha256": "b9417d3d85ae2fac", "input_chars": 365, "input_preview": "As a fan of How It Works, I have a deep interest in astronomy. I first encounter", "output_guess": "human", "output_confidence": 0.3, "model_score": 0.6349, "style_score": 0.2852, "t_total_ms": 159.9, "t_model_ms": 157.9, "t_style_ms": 1.0, "t_load_ms": 0.0, "cpu_ms": 1359.4, "reason": null}
+{"ts": "2026-11-18T01:01:55.450+00:00", "request_id": "3c913089-efb5-4f26-98ad-65ef8497684a", "creator_id": "capafter1_b", "event": "decided", "status": 200, "input_sha256": "e17ceacd8bd5d70d", "input_chars": 712, "input_preview": "Music is a miracle, it is the root and soul of my life. I found music a second l", "output_guess": "unsure", "output_confidence": 0.4268, "model_score": 0.3466, "style_score": 0.547, "t_total_ms": 161.1, "t_model_ms": 148.5, "t_style_ms": 0.3, "t_load_ms": 0.0, "cpu_ms": 1218.8, "reason": null}
+{"ts": "2026-11-18T01:01:55.564+00:00", "request_id": "18388dd2-3524-435b-8f8c-fc4d36a19343", "creator_id": "capafter1_c", "event": "decided", "status": 200, "input_sha256": "54b831aff4d0c8d7", "input_chars": 241, "input_preview": "I conducted several independent research studies including attention economy and", "output_guess": "unsure", "output_confidence": 0.4592, "model_score": 0.1556, "style_score": 0.9145, "t_total_ms": 105.3, "t_model_ms": 87.5, "t_style_ms": 0.2, "t_load_ms": 0.0, "cpu_ms": 578.1, "reason": null}
+{"ts": "2026-11-18T01:01:56.526+00:00", "request_id": "e081e025-7d2a-497a-b534-0638a4c1e9a7", "creator_id": "capafter1_c", "event": "decided", "status": 200, "input_sha256": "d6255b91530413ea", "input_chars": 710, "input_preview": "Apart from academics, the Twin Cities offers a world of creative exploration. I ", "output_guess": "human", "output_confidence": 0.3, "model_score": 0.5625, "style_score": 0.1206, "t_total_ms": 158.4, "t_model_ms": 140.7, "t_style_ms": 0.3, "t_load_ms": 0.0, "cpu_ms": 1234.4, "reason": null}
+{"ts": "2026-11-18T01:01:56.639+00:00", "request_id": "22f9c3bf-b662-45a5-bf17-39e6c4679994", "creator_id": "capafter1_a", "event": "decided", "status": 200, "input_sha256": "8bd97a84ac20cc7a", "input_chars": 344, "input_preview": "He told me that one of my piano arrangements had kept him company during the low", "output_guess": "unsure", "output_confidence": 0.6076, "model_score": 0.6178, "style_score": 0.5922, "t_total_ms": 105.7, "t_model_ms": 91.4, "t_style_ms": 0.3, "t_load_ms": 0.0, "cpu_ms": 859.4, "reason": null}
+{"ts": "2026-11-18T01:01:56.742+00:00", "request_id": "6600edcd-1c70-4202-a87c-f861fa727ce0", "creator_id": "capafter1_b", "event": "decided", "status": 200, "input_sha256": "4afd2daf4d8229dd", "input_chars": 303, "input_preview": "The implementation of the proposed framework requires careful consideration of s", "output_guess": "ai", "output_confidence": 0.8048, "model_score": 0.8864, "style_score": 0.6823, "t_total_ms": 95.3, "t_model_ms": 77.7, "t_style_ms": 0.2, "t_load_ms": 0.0, "cpu_ms": 734.4, "reason": null}
+{"ts": "2026-11-18T01:01:56.896+00:00", "request_id": "19c3738d-ba9c-4f79-975b-adba58f31dfe", "creator_id": "capafter1_c", "event": "decided", "status": 200, "input_sha256": "8035263b491c6c2e", "input_chars": 637, "input_preview": "Artificial intelligence has become an important part of modern life. It is used ", "output_guess": "ai", "output_confidence": 0.8, "model_score": 0.881, "style_score": 0.5603, "t_total_ms": 144.0, "t_model_ms": 129.1, "t_style_ms": 0.2, "t_load_ms": 0.0, "cpu_ms": 1218.8, "reason": null}
+{"ts": "2026-11-18T01:01:57.658+00:00", "request_id": null, "creator_id": "capafter1_a", "event": "rejected", "status": 400, "input_sha256": null, "input_chars": 0, "input_preview": null, "output_guess": null, "output_confidence": null, "model_score": null, "style_score": null, "t_total_ms": 11.8, "t_model_ms": 0.0, "t_style_ms": 0.0, "t_load_ms": 0.0, "cpu_ms": 0.0, "reason": "missing_or_empty_text"}
+{"ts": "2026-11-18T01:01:57.680+00:00", "request_id": null, "creator_id": "capafter1_b", "event": "rejected", "status": 400, "input_sha256": null, "input_chars": 0, "input_preview": null, "output_guess": null, "output_confidence": null, "model_score": null, "style_score": null, "t_total_ms": 14.1, "t_model_ms": 0.0, "t_style_ms": 0.0, "t_load_ms": 0.0, "cpu_ms": 109.4, "reason": "missing_or_empty_text"}
+{"ts": "2026-11-18T01:01:57.702+00:00", "request_id": null, "creator_id": "capafter1_c", "event": "rejected", "status": 413, "input_sha256": "11944abade5a6513", "input_chars": 250000, "input_preview": "word word word word word word word word word word word word word word word word ", "output_guess": null, "output_confidence": null, "model_score": null, "style_score": null, "t_total_ms": 12.8, "t_model_ms": 0.0, "t_style_ms": 0.0, "t_load_ms": 0.0, "cpu_ms": 109.4, "reason": "text_too_large"}
+```
+
+The 159.9 ms line decomposes as 157.9 + 1.0 + 1.0, and `0.6 × 0.6349 + 0.4 × 0.2852 = 0.495`, which
+the human gate caps at 0.30 — the record carries everything needed to redo that by hand. The three
+rejected lines cost 11.8, 14.1 and 12.8 ms and ran no model at all, which is what the `t_total_ms`
+column is for.
+
+**What It Costs**
+
+Measured over the 81 decided requests of the `after` run, warm (the model already loaded):
+
+| | |
+|---|---|
+| wall time, p50 | **139.7 ms** |
+| wall time, p95 | 230.6 ms |
+| of which the model signal | 123.6 ms (88%) |
+| of which the style signal | 0.3 ms |
+| of which everything else (JSON, tokenise, the log write) | 15.5 ms |
+| **CPU per request**, median | **1.05 CPU-seconds** (mean 1.14) |
+
+CPU is larger than wall time because `torch` runs the forward pass on several threads: eight threads
+for 140 ms is about a second of CPU. That is the number to price, not the wall time.
+
+**How I measured it.** `observe.summary()` divides the summed `cpu_ms` by the row count; the
+per-stage numbers are the `t_model_ms` and `t_style_ms` columns of the same rows, sorted. Nothing
+here is taken from a vendor's pricing page — the CPU seconds are this machine's, and the price below
+is the only borrowed number.
+
+**The hundred-a-day arithmetic.**
+
+100 submissions × 1.05 CPU-s = **105 CPU-seconds a day**, under two CPU-minutes.
+At USD 0.0416/hour for a 2 vCPU instance — USD 0.00000578 per CPU-second — that is **USD 0.0006 a
+day**, six hundredths of a cent.
+
+**Which is not what this costs to run.** The model is ~870 MB resident whether or not anyone
+submits, so the bill is the smallest instance that fits it: 2 GB at about USD 0.012/hour, **USD 0.29
+a day**. A hundred submissions a day move that by 0.2%. The cost of this system is the model sitting
+in memory, not the work it does — which is the same arithmetic that rules out the 512 MB free tier,
+seen from the other side.
+
+**What measuring it cost.** The timings were already in the record, so this section added no code
+and no run: the same 81 rows that prove the label also price it. That is the return on putting the
+duration in the log rather than in a stopwatch.
+
+**Run Log and Verdicts**
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. one record per request | 20 new lines, every field present | 20/20 | 20/20 | 20/20 | **MET** |
+| 2. the duration is the real duration | 10/10 within 15% or 100 ms | 10/10 | 10/10 | 10/10 | **MET** |
+| 3. stats match their own rows | n equal, p50 and p95 within 1 ms | ok | ok | ok | **MET** |
+| 4. a fresh copy serves with its own record | 3/3 starts, own count 1-2-3 | 200, n=1 | 200, n=2 | 200, n=3 | **MET** |
+| 5. the first request is not a load | under 3 s, 3 of 3 | 11.2 s | 11.3 s | 12.4 s | **MISSED** |
+
+**How each verdict was decided.** C1 is MET because twenty calls produced exactly twenty new lines
+and every one carried `ts`, `input_chars`, `status` and `t_total_ms`, with `model_score`,
+`style_score` and `output_confidence` on all seventeen decided lines. C2 is MET because all ten
+paired calls in every trial fell inside `max(100 ms, 15%)` — the largest discrepancy anywhere in the
+thirty pairs of the run was 6.1 ms, on a 117 ms call, which is far inside the tolerance. C3 is MET because `/stats` and a hand recomputation from the raw lines agreed on `n`, `p50`
+and `p95` to the tenth of a millisecond, three times — it is a consistency check between two paths to
+the same number, not a claim that those statistics are the right ones to care about. C4 is MET because each of the three starts
+answered and each wrote its own line into its own copy's log, counted 1-2-3. What that does not test
+is the model cache: this machine's `HF_HOME` already points at the weights, so the 525 MB download a
+reader without it would hit is documented in `RUNNING.md` rather than exercised here. C5 is **MISSED**: the
+first `/submit` after a start took 11.2, 11.3 and 12.4 seconds against a 3-second target, every
+trial.
+
+**The miss, and the stage it names.** Criterion 5 failed in all three trials: the first `/submit`
+after a start took 11.2, 11.3 and 12.4 seconds. The stage is `detector.py::_load`, reached from
+`detector.perplexity` on the first scoring call; the mechanism is that `_model` is `None` at import,
+so whichever request arrives first pays for importing `torch` and reading 525 MB of weights. The
+record says it directly: `t_load_ms` is 11,188 on that line and 0.0 on the ones after it. The change
+that follows from it is in **The Improvement**, below.
+
+**Real output, one trial, with the file and function that produced each number.**
+
+*Criterion 1* — `capstone_eval.py::trial_main`, driving `app.py::submit`; the records are written by
+`observe.py::record`:
+
+```json
+{"lines": 20, "expected": 20, "statuses": [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 400, 400, 413], "fields_ok": true, "decided_ok": true}
+```
+
+*Criterion 2* — the first three of ten pairs; `t_total_ms` comes from `observe.py::record`, the client
+number from the clock in `capstone_eval.py::trial_main`:
+
+```json
+[{"recorded_ms": 131.9, "client_ms": 134.8, "ok": true},
+ {"recorded_ms": 190.1, "client_ms": 192.9, "ok": true},
+ {"recorded_ms": 111.1, "client_ms": 117.2, "ok": true}]
+```
+
+*Criterion 3* — `app.py::stats` against the same statistics recomputed by hand from
+`logs/requests.jsonl`:
+
+```json
+{"n": 43, "lines": 43, "p50": 177.6, "p50_recomputed": 177.6, "p95": 12999.8, "p95_recomputed": 12999.8, "ok": true}
+```
+
+The p95 is 13 s because the file still holds the cold starts from the sessions above it. The **What It Costs** section reports warm figures from the after run only, which is the population that matters
+for a steady-state request.
+
+*Criterion 4* — `capstone_eval.py::trial_start`, one record per start, each reading its own copy's
+log:
+
+```json
+[{"status": 200, "health_ok": true, "lines_in_this_copy": 1, "import_ms": 425.5, "first_ms": 11187.6},
+ {"status": 200, "health_ok": true, "lines_in_this_copy": 2, "import_ms": 408.1, "first_ms": 11273.3},
+ {"status": 200, "health_ok": true, "lines_in_this_copy": 3, "import_ms": 424.9, "first_ms": 12396.9}]
+```
+
+*Criterion 5* — the same three runs, the column that failed: `first_ms` = **11187.6, 11273.3,
+12396.9** against a 3000 ms target.
+
+**Where the evidence is.** `results/capstone_before_2026-11-18_0900.md` — the table above, the
+per-call pairs, the `/stats` comparison, the three start records, and ten raw lines. The after-fix
+run is `results/capstone_after_2026-11-18_0902.md`, same format.
+
+**The Improvement**
+
+**What I changed:** one switch in `app.py`. The model is now loaded when the module is imported —
+which is before `python app.py` starts serving, and before `gunicorn app:app` accepts a connection —
+instead of inside whichever request arrives first. `AI201_WARM_ON_IMPORT=0` restores the old
+behaviour, and that switch is how the before and after numbers below come from one code path instead
+of two commits.
+
+**Which diagnosis pointed at it:** criterion 5. `detector._load()` is lazy — `_model` is `None` at
+import, so the first scoring call after every start pays for importing `torch` and reading 525 MB of
+weights inside a user's request. The record shows it directly: `t_load_ms` is 11,188 ms on the first
+line after a start and 0.0 on every line after it.
+
+**Before:** first `/submit` after a start — 11,188 ms, 11,273 ms, 12,397 ms. Import: 426, 408,
+425 ms. Total from start to first answer: 11,613 / 11,681 / 12,822 ms.
+**After:** first `/submit` after a start — 215 ms, 199 ms, 290 ms. Import: 11,275, 10,996,
+11,677 ms. Total: 11,490 / 11,195 / 11,967 ms.
+
+**Did it help, and how do I know:** yes for the number a user feels, and no for the total. The first
+request fell from a median of 11.3 s to 0.22 s — fifty times — while start-to-first-answer stayed
+where it was, around 11.5 s. The 11 s did not disappear; it moved to the start, and that is the trade
+I wanted: a deployment can wait, a user cannot. It also changes what a broken model does — it now
+fails the start instead of the first request, which is the difference between a bad deploy and a bad
+first impression.
+
+**What it cost elsewhere:** the port stays closed for 11 s longer, which matters if anything is
+polling `/health` as a liveness check after a restart. Under `gunicorn` each worker imports the
+module, so each worker now loads its own copy: two workers means two 870 MB processes, which is why
+`--preload` (or a single worker) is the only sane configuration on this machine. And the memory is
+resident from second zero instead of from the first request.
+
+**The same five criteria, after the change.** Same columns, same instrument — `python
+capstone_eval.py main`, and `start` three times from a fresh copy. The before table is in **Run Log
+and Verdicts** above, so the two can be read side by side.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. one record per request | 20 new lines, every field present | 20/20 | 20/20 | 20/20 | **MET** |
+| 2. the duration is the real duration | 10/10 within 15% or 100 ms | 10/10 | 10/10 | 10/10 | **MET** |
+| 3. stats match their own rows | n equal, p50 and p95 within 1 ms | ok | ok | ok | **MET** |
+| 4. a fresh copy serves with its own record | 3/3 starts, own count 1-2-3 | 200, n=1 | 200, n=2 | 200, n=3 | **MET** |
+| 5. the first request is not a load | under 3 s, 3 of 3 | 0.2 s | 0.2 s | 0.3 s | **MET** |
+
+Four of the five rows are identical to the before run, which is the point: exactly one thing moved.
+The row that changed is the one the diagnosis named, from 11.2 / 11.3 / 12.4 s to
+0.22 / 0.20 / 0.29 s. Full record: `results/capstone_after_2026-11-18_0902.md`.
+
+**What's Still Broken**
+
+| Still broken | What I would do | Why I stopped |
+|---|---|---|
+| **`style_signal`'s `0.5` means two things** — a real score and "no scoreable words" — so the AI gate had to be changed from `>=` to `>` in unit 8 to work around it | Return `(score, available)` and have `combine_signals` read the flag, which removes the class of bug instead of this instance of it | It changes the contract that five criteria and 56 attack rows were measured against. Doing it here invalidates both sets and there is no time to re-measure them properly; the `>` comparison is the patch that buys the time |
+| **No unit tests on the pure functions** — `combine_signals`, `style_signal` and the three stylometry measures still have no assertions | `test_units.py` with the four boundaries named in the unit 7 feedback: `style` exactly 0.5, `model` exactly 0.85, a one-sentence text, text with no scoreable words | This unit's required half is the operational layer; a half-written test file is worse than a named gap |
+| **Which gate fired is not recorded** | Return `(score, branch)` from `combine_signals` with `weighted` / `ai_gate` / `human_gate` | The record already carries the three numbers that re-derive it, so it is recoverable rather than recorded; changing a return type belongs with the sentinel fix |
+| **No hosted path at all** | A quantised or ONNX build of a much smaller model, which would fit 512 MB, or an always-on 2 GB instance at about USD 0.29/day | 525 MB of weights and 870 MB resident is the whole reason Path B exists. Swapping the model changes every score in both units' evidence |
+| **Startup is 11 s and does not shrink** | Keep the process warm between deploys, or move scoring behind a queue so the start does not gate serving | It is the model's size, and there is one model. The 11 s is now visible and measured, which is what this unit could do about it |
+| **`/stats` is O(n) and the log never rotates** | Count in memory and flush with each record; rotate by day | At 100 requests a day the file is 20 MB a year and `/stats` is a rounding error. It is wrong at 10⁶ rows, not at this size |
+
+| **Two of the five targets are softer than the rest** | Tighten criterion 2 from `max(100 ms, 15%)` to 50 ms — the worst measured gap was 6.1 ms, so it would still pass — and replace criterion 3, which only checks that two paths to the same number agree, with something that could fail if the record were wrong, such as a restart mid-run and a check that the counter carries on | Both were fixed before the first trial, and moving a target afterwards is the one thing this unit says not to do. The loose ceiling is also honest about a laptop that was running other things at the time |
+**If I had one more afternoon, I would fix the sentinel.** `style_signal` returns `0.5` both as a
+real score and as "no scoreable words", and the fact that the workaround needed a comment explaining
+why is the argument: a sentinel that means two things will produce bugs faster than they can be
+patched. It is also the cheapest item on this list — one function, one call site, four assertions —
+and it is the only one that is a bug rather than a project. The model swap is second: 525 MB is what
+keeps this on a laptop, and a smaller model is what would let the cheap path exist at all.
+
+**What I did about the unit 7 feedback.** Two of the four suggestions are in this unit's code: the
+four validation rules moved into `app.py::_validate`, which returns `(text, creator_id)` or a
+status/error/reason/message tuple, and `MAX_TEXT_CHARS` moved into `config.py` with the 413 message
+reading from it. The other two are the sentinel and the tests, both in the table above with the
+reason they wait — in both cases because they change what the unit 8 evidence measured. The refactor
+is not the improvement: it changes no response, it was checked with six `curl` calls before anything
+else was built, and its only purpose was to make room in the route for the record.
+
+**How I Used AI**
+
+**Moment 1**
+*What I asked for:* to lay the capstone's three shapes against this repository and say which one the
+existing code leaves room for, and to check whether a free host could run it at all.
+*What came back:* that shape A is the only one whose build is not also a feature, and an estimate of
+about 1.1 GB resident against a 512 MB tier.
+*What I changed:* I measured the resident size myself instead of taking the estimate — 870 MB, peak
+887 MB — and wrote the table from that number, which also meant correcting an earlier "1.1 GB" in
+The Shape. I cut the second-signal idea the assistant offered as a stretch, because unit 8's own
+diagnosis says signal one is a rewrite and this unit's build half cannot hold it.
+
+**Moment 2**
+*What I asked for:* a first draft of the per-request record and where to put the timers in `/submit`.
+*What came back:* a version that logged the full input text and stopped at the label.
+*What I changed:* I replaced the text with a hash, a length and an 80-character preview, because a
+log that keeps other people's writing is a second copy of the thing the appeal path protects. I put
+`model_score` and `style_score` back in, because unit 8's diagnosis only worked because both were
+logged. And I added `t_load_ms`, which the draft did not have and which is the whole of criterion 5:
+without it, a slow first request looks like a slow model call, and every fix would target the wrong
+stage.
