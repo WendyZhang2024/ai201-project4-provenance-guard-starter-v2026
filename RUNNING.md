@@ -234,6 +234,88 @@ your write-up; that's the deliverable.
 
 ---
 
+## Path B — the run path (unit 9)
+
+Provenance Guard runs on this machine. There is no URL, and the section above is why: the
+arithmetic does not fit a 512 MB free tier. What Path B asks for instead is a run someone else
+can reproduce, and a record of it having run more than once.
+
+### Where it is
+
+https://github.com/WendyZhang2024/ai201-project4-provenance-guard-starter-v2026
+
+### From nothing to a 200
+
+```powershell
+git clone https://github.com/WendyZhang2024/ai201-project4-provenance-guard-starter-v2026.git
+cd ai201-project4-provenance-guard-starter-v2026
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python test.py
+python app.py
+```
+
+`test.py` prints eight `[PASS]` lines and one `[WARN]` about the model cache — read the next
+section before worrying about it. `pip install` is the slow step: `torch` is most of the
+download, and on a machine that has never installed it that is a few minutes, not a few seconds.
+
+`python app.py` prints the URL and the log path, then serves. Leave that terminal running.
+
+In a second terminal:
+
+```powershell
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" --data-raw '{"text": "I like my weekends. I do simple things: I play music. I cook. I watch shows.", "creator_id": "reader_test"}'
+```
+
+A 200 carrying `guess`, `confidence` and `label` means it works. Then:
+
+```powershell
+curl.exe -s http://127.0.0.1:5000/stats
+```
+
+which prints the count, p50, p95 and cost across everything in `logs/requests.jsonl`.
+
+### The model cache — the step that bites
+
+`detector.py` asks Hugging Face for `gpt2`, and where it looks is `HF_HOME`. In this repository
+that points at `.hf-cache`, which is gitignored, so **a clone does not carry the 525 MB of
+weights**. On my machine the clone still starts in seconds, because `HF_HOME` is a user
+environment variable pointing at the original folder — a reason a reader would never guess from
+the repository. On a machine without it, the first `python app.py` downloads 525 MB before it
+prints its URL, and `test.py` keeps warning that the model is missing until it does. If
+`HF_HOME` is unset, the cache lands in `%USERPROFILE%\.cache\huggingface`.
+
+### What it needs
+
+| | |
+|---|---|
+| Python | 3.11, 3.12 or 3.13 — tested on 3.11.9 |
+| Packages | `pip install -r requirements.txt`: seven pinned packages, `torch` is nearly all of the download |
+| Model | `gpt2`, 525 MB on disk, fetched once on the first start |
+| Memory | about 870 MB resident once the model is loaded (measured with `Get-Process`) |
+| Disk | about 1.4 GB free: 837 MB of venv plus the 525 MB model |
+| Keys | **none** — the service calls no hosted API, so there is nothing to put in `.env` |
+| Port | 5000 by default; set `PORT` to move it |
+
+### One switch
+
+`AI201_WARM_ON_IMPORT=0` makes the service load the model inside the first request instead of when
+the module is imported. It exists so the before and after numbers in the README's Improvement
+section can come from one code path rather than two commits; leave it alone and the first request
+after a start is the fast one.
+
+### Two files the service writes
+
+`logs/requests.jsonl` — one line per request, including the ones that were rejected: the input
+hash and an 80-character preview, the label and both signal scores, and the stage timings. The
+unit's evidence comes from this file.
+
+`logs/audit.jsonl` — the unit 8 decision log. Still written; the request record sits beside it
+rather than replacing it.
+
+---
+
 ## Where everything lives
 
 | File | What it does |
