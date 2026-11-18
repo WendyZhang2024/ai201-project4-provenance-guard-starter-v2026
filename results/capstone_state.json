@@ -1,0 +1,644 @@
+{
+  "before": {
+    "main": [
+      {
+        "c1": {
+          "lines": 20,
+          "expected": 20,
+          "statuses": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            400,
+            400,
+            413
+          ],
+          "fields_ok": true,
+          "decided_ok": true
+        },
+        "c2": {
+          "passed": 10,
+          "of": 10,
+          "pairs": [
+            {
+              "recorded_ms": 131.9,
+              "client_ms": 134.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 190.1,
+              "client_ms": 192.9,
+              "ok": true
+            },
+            {
+              "recorded_ms": 111.1,
+              "client_ms": 117.2,
+              "ok": true
+            },
+            {
+              "recorded_ms": 130.6,
+              "client_ms": 133.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 203.4,
+              "client_ms": 206.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 164.5,
+              "client_ms": 167.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 133.2,
+              "client_ms": 139.0,
+              "ok": true
+            },
+            {
+              "recorded_ms": 231.0,
+              "client_ms": 235.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 212.0,
+              "client_ms": 214.4,
+              "ok": true
+            },
+            {
+              "recorded_ms": 139.4,
+              "client_ms": 142.2,
+              "ok": true
+            }
+          ]
+        },
+        "c3": {
+          "n": 43,
+          "lines": 43,
+          "p50": 177.6,
+          "p50_recomputed": 177.6,
+          "p95": 12999.8,
+          "p95_recomputed": 12999.8,
+          "ok": true
+        }
+      },
+      {
+        "c1": {
+          "lines": 20,
+          "expected": 20,
+          "statuses": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            400,
+            400,
+            413
+          ],
+          "fields_ok": true,
+          "decided_ok": true
+        },
+        "c2": {
+          "passed": 10,
+          "of": 10,
+          "pairs": [
+            {
+              "recorded_ms": 119.7,
+              "client_ms": 122.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 204.2,
+              "client_ms": 206.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 93.7,
+              "client_ms": 95.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 106.2,
+              "client_ms": 108.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 200.6,
+              "client_ms": 203.2,
+              "ok": true
+            },
+            {
+              "recorded_ms": 155.0,
+              "client_ms": 158.0,
+              "ok": true
+            },
+            {
+              "recorded_ms": 135.5,
+              "client_ms": 138.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 213.6,
+              "client_ms": 217.9,
+              "ok": true
+            },
+            {
+              "recorded_ms": 189.1,
+              "client_ms": 192.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 123.3,
+              "client_ms": 126.2,
+              "ok": true
+            }
+          ]
+        },
+        "c3": {
+          "n": 73,
+          "lines": 73,
+          "p50": 157.0,
+          "p50_recomputed": 157.0,
+          "p95": 10370.8,
+          "p95_recomputed": 10370.8,
+          "ok": true
+        }
+      },
+      {
+        "c1": {
+          "lines": 20,
+          "expected": 20,
+          "statuses": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            400,
+            400,
+            413
+          ],
+          "fields_ok": true,
+          "decided_ok": true
+        },
+        "c2": {
+          "passed": 10,
+          "of": 10,
+          "pairs": [
+            {
+              "recorded_ms": 125.6,
+              "client_ms": 128.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 196.5,
+              "client_ms": 199.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 108.8,
+              "client_ms": 112.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 118.9,
+              "client_ms": 122.6,
+              "ok": true
+            },
+            {
+              "recorded_ms": 198.8,
+              "client_ms": 201.2,
+              "ok": true
+            },
+            {
+              "recorded_ms": 158.5,
+              "client_ms": 161.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 132.2,
+              "client_ms": 136.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 202.8,
+              "client_ms": 205.2,
+              "ok": true
+            },
+            {
+              "recorded_ms": 192.1,
+              "client_ms": 196.5,
+              "ok": true
+            },
+            {
+              "recorded_ms": 124.0,
+              "client_ms": 126.3,
+              "ok": true
+            }
+          ]
+        },
+        "c3": {
+          "n": 103,
+          "lines": 103,
+          "p50": 153.7,
+          "p50_recomputed": 153.7,
+          "p95": 10275.3,
+          "p95_recomputed": 10275.3,
+          "ok": true
+        }
+      }
+    ],
+    "start": [
+      {
+        "ts": "2026-11-18T08:59:46",
+        "import_ms": 425.5,
+        "first_ms": 11187.6,
+        "total_ms": 11613.1,
+        "status": 200,
+        "health_ok": true,
+        "lines_in_this_copy": 1,
+        "warm_on_import": "0"
+      },
+      {
+        "ts": "2026-11-18T08:59:59",
+        "import_ms": 408.1,
+        "first_ms": 11273.3,
+        "total_ms": 11681.3,
+        "status": 200,
+        "health_ok": true,
+        "lines_in_this_copy": 2,
+        "warm_on_import": "0"
+      },
+      {
+        "ts": "2026-11-18T09:00:13",
+        "import_ms": 424.9,
+        "first_ms": 12396.9,
+        "total_ms": 12821.9,
+        "status": 200,
+        "health_ok": true,
+        "lines_in_this_copy": 3,
+        "warm_on_import": "0"
+      }
+    ]
+  },
+  "after": {
+    "main": [
+      {
+        "c1": {
+          "lines": 20,
+          "expected": 20,
+          "statuses": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            400,
+            400,
+            413
+          ],
+          "fields_ok": true,
+          "decided_ok": true
+        },
+        "c2": {
+          "passed": 10,
+          "of": 10,
+          "pairs": [
+            {
+              "recorded_ms": 144.1,
+              "client_ms": 146.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 211.7,
+              "client_ms": 215.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 92.3,
+              "client_ms": 94.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 114.4,
+              "client_ms": 116.6,
+              "ok": true
+            },
+            {
+              "recorded_ms": 174.9,
+              "client_ms": 177.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 131.7,
+              "client_ms": 133.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 129.3,
+              "client_ms": 132.0,
+              "ok": true
+            },
+            {
+              "recorded_ms": 183.3,
+              "client_ms": 186.0,
+              "ok": true
+            },
+            {
+              "recorded_ms": 231.5,
+              "client_ms": 233.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 114.7,
+              "client_ms": 117.4,
+              "ok": true
+            }
+          ]
+        },
+        "c3": {
+          "n": 133,
+          "lines": 133,
+          "p50": 153.6,
+          "p50_recomputed": 153.6,
+          "p95": 9906.6,
+          "p95_recomputed": 9906.6,
+          "ok": true
+        }
+      },
+      {
+        "c1": {
+          "lines": 20,
+          "expected": 20,
+          "statuses": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            400,
+            400,
+            413
+          ],
+          "fields_ok": true,
+          "decided_ok": true
+        },
+        "c2": {
+          "passed": 10,
+          "of": 10,
+          "pairs": [
+            {
+              "recorded_ms": 113.2,
+              "client_ms": 115.5,
+              "ok": true
+            },
+            {
+              "recorded_ms": 163.8,
+              "client_ms": 166.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 96.8,
+              "client_ms": 99.6,
+              "ok": true
+            },
+            {
+              "recorded_ms": 126.6,
+              "client_ms": 129.2,
+              "ok": true
+            },
+            {
+              "recorded_ms": 204.0,
+              "client_ms": 206.4,
+              "ok": true
+            },
+            {
+              "recorded_ms": 136.3,
+              "client_ms": 138.5,
+              "ok": true
+            },
+            {
+              "recorded_ms": 128.2,
+              "client_ms": 130.9,
+              "ok": true
+            },
+            {
+              "recorded_ms": 231.7,
+              "client_ms": 233.9,
+              "ok": true
+            },
+            {
+              "recorded_ms": 204.4,
+              "client_ms": 207.0,
+              "ok": true
+            },
+            {
+              "recorded_ms": 120.3,
+              "client_ms": 123.6,
+              "ok": true
+            }
+          ]
+        },
+        "c3": {
+          "n": 163,
+          "lines": 163,
+          "p50": 139.4,
+          "p50_recomputed": 139.4,
+          "p95": 328.0,
+          "p95_recomputed": 328.0,
+          "ok": true
+        }
+      },
+      {
+        "c1": {
+          "lines": 20,
+          "expected": 20,
+          "statuses": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            400,
+            400,
+            413
+          ],
+          "fields_ok": true,
+          "decided_ok": true
+        },
+        "c2": {
+          "passed": 10,
+          "of": 10,
+          "pairs": [
+            {
+              "recorded_ms": 154.2,
+              "client_ms": 157.6,
+              "ok": true
+            },
+            {
+              "recorded_ms": 209.5,
+              "client_ms": 212.7,
+              "ok": true
+            },
+            {
+              "recorded_ms": 107.7,
+              "client_ms": 110.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 139.7,
+              "client_ms": 143.1,
+              "ok": true
+            },
+            {
+              "recorded_ms": 230.6,
+              "client_ms": 233.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 194.1,
+              "client_ms": 197.2,
+              "ok": true
+            },
+            {
+              "recorded_ms": 170.4,
+              "client_ms": 174.3,
+              "ok": true
+            },
+            {
+              "recorded_ms": 219.9,
+              "client_ms": 223.6,
+              "ok": true
+            },
+            {
+              "recorded_ms": 210.2,
+              "client_ms": 212.8,
+              "ok": true
+            },
+            {
+              "recorded_ms": 125.7,
+              "client_ms": 128.6,
+              "ok": true
+            }
+          ]
+        },
+        "c3": {
+          "n": 193,
+          "lines": 193,
+          "p50": 144.1,
+          "p50_recomputed": 144.1,
+          "p95": 311.7,
+          "p95_recomputed": 311.7,
+          "ok": true
+        }
+      }
+    ],
+    "start": [
+      {
+        "ts": "2026-11-18T09:01:11",
+        "import_ms": 11274.7,
+        "first_ms": 215.2,
+        "total_ms": 11489.9,
+        "status": 200,
+        "health_ok": true,
+        "lines_in_this_copy": 1,
+        "warm_on_import": "1"
+      },
+      {
+        "ts": "2026-11-18T09:01:23",
+        "import_ms": 10996.1,
+        "first_ms": 198.5,
+        "total_ms": 11194.5,
+        "status": 200,
+        "health_ok": true,
+        "lines_in_this_copy": 2,
+        "warm_on_import": "1"
+      },
+      {
+        "ts": "2026-11-18T09:01:36",
+        "import_ms": 11677.4,
+        "first_ms": 289.5,
+        "total_ms": 11966.8,
+        "status": 200,
+        "health_ok": true,
+        "lines_in_this_copy": 3,
+        "warm_on_import": "1"
+      }
+    ]
+  }
+}
