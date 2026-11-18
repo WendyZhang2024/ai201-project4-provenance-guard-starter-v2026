@@ -939,3 +939,29 @@ calls against `app.py::appeal`.
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+## Capstone
+
+**What This Extends**
+
+`ai201-project4-provenance-guard-starter-v2026` — the Provenance Guard service from units 7 and 8.
+It turns a submission into a label and writes an audit record of that decision. What is new this unit
+is the operational layer around the decision: a per-request record carrying the input, the output and
+the duration; a stage breakdown showing where a request's time went; a measured cost per request; and
+a run path documented well enough that someone else can start the service from a clean checkout.
+The two signals, the combining rule, the thresholds and the labels are unchanged.
+
+**The Shape**
+
+**Shape A — deploy and instrument.** The build is the operational layer, not a new signal.
+
+Out of scope, in three parts:
+
+1. **No new detection capability.** `detector.model_signal`, `stylometry.style_signal` and the
+   0.6/0.4 combining rule are untouched. Unit 8's diagnosis points at signal one, and fixing that
+   is a detector rewrite — the work this unit's short build half cannot hold.
+2. **No hosted deployment.** About 1.1 GB of resident memory against a 512 MB free tier, with no
+   persistent disk for the 525 MB of weights. The run path is Path B, and the deliverable is the
+   committed run record produced by the documented start command. The arithmetic is in Running It.
+3. **No second measured improvement.** One change, measured, is the requirement. The stretch items
+   are not attempted, and nothing here claims them.
