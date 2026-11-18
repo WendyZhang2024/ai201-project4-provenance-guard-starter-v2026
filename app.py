@@ -24,6 +24,7 @@ Routes:
     GET  /health      is the service up, and is the model loaded
 """
 
+import os
 import time
 import uuid
 
@@ -405,6 +406,20 @@ def main():
     print()
     # debug=True hands out an interactive debugger, so it's local-only — see config.py
     app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
+
+
+# ── UNIT 9 — the run path ─────────────────────────────────────────────────────
+
+# Load the model when this module is imported rather than inside the first
+# request. `python app.py` and `gunicorn app:app` both import before serving, so
+# the cost moves from the first user's request to the process start — where a
+# deploy can wait and a user cannot, and where a model that refuses to load
+# fails the start instead of the first request.
+#
+# AI201_WARM_ON_IMPORT=0 turns it off. That switch is how the before and after
+# numbers come from one code path instead of two commits.
+if os.getenv("AI201_WARM_ON_IMPORT", "1") == "1":
+    detector.warm_up()
 
 
 if __name__ == "__main__":
