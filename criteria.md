@@ -115,3 +115,73 @@ Two things worth knowing before you pick numbers:
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+---
+
+## Unit 9 — Capstone criteria
+
+Written before any of the five criteria below were run, and before `capstone_eval.py` existed. The
+extension was built first — that is this course's own order — but none of it had been measured when
+these five were fixed. Five criteria about the operational layer, not about the detector: the five
+above are the detector's, and they are unchanged.
+
+**1. Every request leaves a record, including the ones that failed.**
+Twenty `/submit` calls in one session — 17 valid, 2 malformed, 1 oversized — add exactly 20 new
+lines to `logs/requests.jsonl`. Every line carries a non-empty `ts`, `input_chars`, `status` and
+`t_total_ms`, every line that carried text carries `input_sha256`, and every `decided` line also
+carries `model_score`, `style_score` and `output_confidence` — so the label can be re-derived from
+the record without the HTTP response. Target: 20 of 20 lines and every field present, in each of
+three trials.
+
+**Why this target:** the extension exists so a request is visible after the fact. Unit 8 already
+showed what an invisible failure costs — the attack that left no trace is the one nobody found —
+and a log that fills only on success is that same blind spot one layer down. The second half is the
+same lesson again: unit 8's best evidence came from keeping both signal scores rather than the
+verdict, because that is what made a diagnosis possible afterwards.
+
+**2. The duration it writes down is the duration that happened.**
+For each of 10 warm requests, `t_total_ms` in the record is within 15% of the wall time the client
+measured for that call, or within 100 ms, whichever is larger. Target: 10 of 10, in each of three
+trials.
+
+**Why this target:** every number in What It Costs is this field averaged, and the p95 in What's
+Still Broken is this field sorted; if it drifts by more than the tolerance then the arithmetic is
+decoration. The two numbers are taken at different points — the client's includes assembling the
+request and decoding the response, the server's starts inside the route — so a few milliseconds of
+gap is structural rather than an error, and a tolerance tight enough to fail on that would be
+measuring the harness. The ceiling is set well above that gap on purpose: across the thirty measured
+pairs the largest difference was 6.1 ms.
+
+**3. The numbers the service reports about itself match its own rows.**
+`GET /stats` returns an `n` equal to the number of lines in `logs/requests.jsonl`, and a `p50_ms`
+and a `p95_ms` within 1 ms of the same two statistics recomputed from those lines. Target: 3 of 3
+trials.
+
+**Why this target:** an aggregate that disagrees with the rows under it is worse than no aggregate,
+because it is the one number I would quote without checking. Recomputing it is ten seconds of
+`python -c`, which is the test of whether a criterion is testable by someone who did not write it.
+
+**4. A fresh copy serves with its own record, and nothing has to be guessed.**
+Three independent starts from a fresh copy of the repository each reach `/health` with
+`"ok": true` and answer one `/submit` with a 200; the copy's own `logs/requests.jsonl` counts only
+what it served (1, then 2, then 3). Target: 3 of 3.
+
+**Why this target:** Path B's whole claim is that someone else can start this from the checkout
+alone, and the only honest test of it is a directory that does not have my shell in it. The counter
+is the part that cannot be faked: if the copy wrote into the original repository's log, the test
+did not happen, however green the response looked.
+
+**5. The first request after a start is a user's request, not a load.**
+From a start, the first `/submit` returns a 200 with a `guess` in under 3 seconds, measured from the
+moment the process starts accepting requests — the load may happen before that moment, and the
+README reports both numbers. Target: 3 of 3 starts.
+
+**Why this target:** the cold load is about 10 s and currently happens inside whichever request
+arrives first, so the first person after any restart pays for the model. 3 s is comfortably above a
+warm request (0.3 s) and far below a load, so the target cannot be met by a faster machine — only
+by moving the load out of the request path.
+
+**How to reproduce all five:** `python capstone_eval.py main --label before` for criteria 1-3,
+`python capstone_eval.py start --label before` three times in a fresh copy for criteria 4 and 5,
+then `python capstone_eval.py report --label before`. The sets it sends are in the script, so
+someone else can rerun it without asking me which texts I meant.
